@@ -1,0 +1,42 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "bladevault-backend",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-06-25",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "bladevault",
+      "database_id": "replace-me",
+      "remote": true
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "BUCKET",
+      "bucket_name": "replace-me",
+      "remote": true
+    }
+  ],
+  "vars": {
+    "APP_NAME": "BladeVault",
+    "BETTER_AUTH_URL": "http://localhost:8787",
+    "COOKIE_DOMAIN": "",
+    "CORS_ORIGIN": "http://localhost:3000",
+    "FRONTEND_URL": "http://localhost:3000",
+    "R2_PUBLIC_BASE_URL": "https://example.r2.dev"
+  },
+  "observability": {
+    "enabled": true
+  },
+  "secrets": {
+    "required": [
+      "BETTER_AUTH_SECRET",
+      "RESEND_API_KEY",
+      "RESEND_FROM_EMAIL"
+    ]
+  }
+}

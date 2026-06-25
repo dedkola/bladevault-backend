@@ -1,0 +1,1 @@
+This folder contains the built output assets for the worker "bladevault-backend" generated at 2026-06-25T13:06:32.968Z.
