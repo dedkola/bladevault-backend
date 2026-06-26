@@ -4,13 +4,18 @@ export interface Env {
   APP_NAME: string;
   BETTER_AUTH_API_KEY?: string;
   BETTER_AUTH_URL: string;
+  CLOUDFLARE_ACCOUNT_ID: string;
   BETTER_AUTH_SECRET: string;
   COOKIE_DOMAIN?: string;
   CORS_ORIGIN: string;
   FRONTEND_URL: string;
   GOOGLE_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;
+  R2_ACCESS_KEY_ID?: string;
+  R2_BUCKET_NAME: string;
   R2_PUBLIC_BASE_URL: string;
+  R2_SECRET_ACCESS_KEY?: string;
+  R2_SIGNED_URL_TTL_SECONDS?: string;
   RESEND_API_KEY?: string;
   RESEND_FROM_EMAIL?: string;
 }

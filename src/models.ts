@@ -1,5 +1,12 @@
 import { z } from "zod";
 
+const imageReferenceSchema = z
+  .string()
+  .min(1)
+  .refine((value) => !value.startsWith("data:image/"), {
+    message: "Inline data URLs are no longer supported. Upload the file to R2 first and store its public URL.",
+  });
+
 export const knifeSpecsSchema = z
   .object({
     weight: z.string().optional(),
@@ -24,8 +31,8 @@ export const knifeInputSchema = z.object({
   steel: z.string().optional(),
   bladeStyle: z.string().optional(),
   handleMaterial: z.string().optional(),
-  images: z.array(z.string()).optional(),
-  imageUrls: z.array(z.string()).optional(),
+  images: z.array(imageReferenceSchema).optional(),
+  imageUrls: z.array(imageReferenceSchema).optional(),
   specs: knifeSpecsSchema.optional(),
   description: z.string().optional(),
   addedAt: z.string().optional(),
@@ -40,8 +47,8 @@ export const knifePatchSchema = z.object({
   steel: z.string().optional(),
   bladeStyle: z.string().optional(),
   handleMaterial: z.string().optional(),
-  images: z.array(z.string()).optional(),
-  imageUrls: z.array(z.string()).optional(),
+  images: z.array(imageReferenceSchema).optional(),
+  imageUrls: z.array(imageReferenceSchema).optional(),
   specs: knifeSpecsSchema.optional(),
   description: z.string().optional(),
   sourceUrl: z.string().optional(),
@@ -62,6 +69,16 @@ export const imageDataUrlSchema = z.object({
   dataUrl: z.string().startsWith("data:image/"),
   knifeId: z.string().min(1).optional(),
   filename: z.string().min(1).optional(),
+});
+
+export const imageUploadSignSchema = z.object({
+  contentType: z.string().trim().toLowerCase().regex(/^image\/[a-z0-9.+-]+$/, "contentType must be an image MIME type"),
+  filename: z.string().trim().min(1).max(255).optional(),
+  knifeId: z.string().min(1).optional(),
+});
+
+export const imageDeleteSignSchema = z.object({
+  publicUrl: z.string().url(),
 });
 
 export interface KnifeSpecs {

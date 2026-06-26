@@ -1,6 +1,9 @@
+import { AwsClient } from "aws4fetch";
 import type { Env } from "./env";
 
 const SAFE_FILENAME = /[^a-zA-Z0-9._-]/g;
+const DEFAULT_SIGNED_URL_TTL_SECONDS = 300;
+const MAX_SIGNED_URL_TTL_SECONDS = 3600;
 
 function toArrayBuffer(base64: string): ArrayBuffer {
   const nativeFromBase64 = (Uint8Array as Uint8ArrayConstructor & {
@@ -71,6 +74,44 @@ function cleanFilePart(value: string): string {
   return value.replace(SAFE_FILENAME, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
 }
 
+function encodeObjectKeyForPath(key: string): string {
+  return key
+    .split("/")
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+}
+
+function getSignedUrlTtlSeconds(env: Pick<Env, "R2_SIGNED_URL_TTL_SECONDS">): number {
+  const parsed = Number.parseInt(env.R2_SIGNED_URL_TTL_SECONDS ?? "", 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_SIGNED_URL_TTL_SECONDS;
+  return Math.min(parsed, MAX_SIGNED_URL_TTL_SECONDS);
+}
+
+function createR2AwsClient(
+  env: Pick<Env, "R2_ACCESS_KEY_ID" | "R2_SECRET_ACCESS_KEY">,
+): AwsClient {
+  if (!env.R2_ACCESS_KEY_ID || !env.R2_SECRET_ACCESS_KEY) {
+    throw new Error("R2 signed URL support is not configured");
+  }
+
+  return new AwsClient({
+    accessKeyId: env.R2_ACCESS_KEY_ID,
+    secretAccessKey: env.R2_SECRET_ACCESS_KEY,
+    service: "s3",
+    region: "auto",
+    retries: 0,
+  });
+}
+
+function buildR2S3ObjectUrl(
+  env: Pick<Env, "CLOUDFLARE_ACCOUNT_ID" | "R2_BUCKET_NAME">,
+  key: string,
+): URL {
+  return new URL(
+    `https://${env.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com/${env.R2_BUCKET_NAME}/${encodeObjectKeyForPath(key)}`,
+  );
+}
+
 export function buildPublicUrl(env: Pick<Env, "R2_PUBLIC_BASE_URL">, key: string): string {
   return `${env.R2_PUBLIC_BASE_URL.replace(/\/+$/, "")}/${key}`;
 }
@@ -91,6 +132,102 @@ function buildKnifeKey(userId: string, knifeId: string, filename: string): strin
 
 function randomFilename(prefix: string, extension: string): string {
   return `${prefix}-${Date.now()}-${crypto.randomUUID().slice(0, 8)}.${extension}`;
+}
+
+export function buildManagedImageKey(
+  userId: string,
+  knifeId: string,
+  contentType: string,
+  filename?: string,
+): string {
+  const extension = inferExtensionFromMimeType(contentType);
+  const nextFilename = filename
+    ? cleanFilePart(filename)
+    : randomFilename("image", extension);
+  const resolvedFilename = nextFilename.includes(".") ? nextFilename : `${nextFilename}.${extension}`;
+  return buildKnifeKey(userId, knifeId, resolvedFilename);
+}
+
+export async function createSignedImageUpload(
+  env: Pick<
+    Env,
+    | "CLOUDFLARE_ACCOUNT_ID"
+    | "R2_ACCESS_KEY_ID"
+    | "R2_BUCKET_NAME"
+    | "R2_PUBLIC_BASE_URL"
+    | "R2_SECRET_ACCESS_KEY"
+    | "R2_SIGNED_URL_TTL_SECONDS"
+  >,
+  userId: string,
+  knifeId: string,
+  contentType: string,
+  filename?: string,
+): Promise<{
+  expiresAt: string;
+  headers: Record<string, string>;
+  key: string;
+  method: "PUT";
+  publicUrl: string;
+  uploadUrl: string;
+}> {
+  const key = buildManagedImageKey(userId, knifeId, contentType, filename);
+  const ttlSeconds = getSignedUrlTtlSeconds(env);
+  const uploadUrl = buildR2S3ObjectUrl(env, key);
+  uploadUrl.searchParams.set("X-Amz-Expires", String(ttlSeconds));
+
+  const signedRequest = await createR2AwsClient(env).sign(uploadUrl.toString(), {
+    method: "PUT",
+    headers: {
+      "Content-Type": contentType,
+    },
+    aws: {
+      signQuery: true,
+    },
+  });
+
+  return {
+    expiresAt: new Date(Date.now() + ttlSeconds * 1000).toISOString(),
+    headers: {
+      "Content-Type": contentType,
+    },
+    key,
+    method: "PUT",
+    publicUrl: buildPublicUrl(env, key),
+    uploadUrl: signedRequest.url,
+  };
+}
+
+export async function createSignedImageDelete(
+  env: Pick<
+    Env,
+    | "CLOUDFLARE_ACCOUNT_ID"
+    | "R2_ACCESS_KEY_ID"
+    | "R2_BUCKET_NAME"
+    | "R2_SECRET_ACCESS_KEY"
+    | "R2_SIGNED_URL_TTL_SECONDS"
+  >,
+  key: string,
+): Promise<{
+  deleteUrl: string;
+  expiresAt: string;
+  method: "DELETE";
+}> {
+  const ttlSeconds = getSignedUrlTtlSeconds(env);
+  const deleteUrl = buildR2S3ObjectUrl(env, key);
+  deleteUrl.searchParams.set("X-Amz-Expires", String(ttlSeconds));
+
+  const signedRequest = await createR2AwsClient(env).sign(deleteUrl.toString(), {
+    method: "DELETE",
+    aws: {
+      signQuery: true,
+    },
+  });
+
+  return {
+    deleteUrl: signedRequest.url,
+    expiresAt: new Date(Date.now() + ttlSeconds * 1000).toISOString(),
+    method: "DELETE",
+  };
 }
 
 export async function uploadImageFromDataUrl(

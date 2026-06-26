@@ -18,13 +18,19 @@ import {
 } from "./data";
 import {
   compareMutationSchema,
-  imageDataUrlSchema,
+  imageDeleteSignSchema,
+  imageUploadSignSchema,
   knifeInputSchema,
   knifePatchSchema,
   syncPushSchema,
   toKnifeRecord,
 } from "./models";
-import { uploadImageFromDataUrl, uploadImageFromFile } from "./storage";
+import {
+  buildUserPrefix,
+  createSignedImageDelete,
+  createSignedImageUpload,
+  extractManagedKey,
+} from "./storage";
 
 type AuthInstance = ReturnType<typeof createAuth>;
 type SessionValue = AuthInstance["$Infer"]["Session"]["session"] | null;
@@ -58,6 +64,15 @@ function createKnifeId() {
   return crypto.randomUUID();
 }
 
+function requireAuth(c: Context<AppType>) {
+  const existing = c.get("auth");
+  if (existing) return existing;
+
+  const auth = createAuth(c.env);
+  c.set("auth", auth);
+  return auth;
+}
+
 async function requireUser(c: Context<AppType>) {
   const user = c.get("user");
   if (!user) throw new Error("Unauthorized");
@@ -69,6 +84,9 @@ const app = new Hono<AppType>();
 const googleStartQuerySchema = z.object({
   callbackURL: z.string().url(),
 });
+
+const DIRECT_UPLOAD_MESSAGE =
+  "Inline image uploads are disabled. Request a signed R2 upload URL, upload directly to R2, then store the returned publicUrl in D1.";
 
 app.use("*", async (c, next) => {
   const allowedOrigins = getAllowedOrigins(c.env);
@@ -85,13 +103,33 @@ app.use("*", async (c, next) => {
   })(c, next);
 });
 
-app.use("*", async (c, next) => {
-  const auth = createAuth(c.env);
+app.use("/api/auth/*", async (c, next) => {
+  requireAuth(c);
+  await next();
+});
+
+app.use("/api/auth/google/start", async (c, next) => {
+  requireAuth(c);
+  await next();
+});
+
+app.use("/api/me", async (c, next) => {
+  const auth = requireAuth(c);
   const session = await auth.api.getSession({
     headers: c.req.raw.headers,
   });
 
-  c.set("auth", auth);
+  c.set("session", session?.session ?? null);
+  c.set("user", session?.user ?? null);
+  await next();
+});
+
+app.use("/api/v1/*", async (c, next) => {
+  const auth = requireAuth(c);
+  const session = await auth.api.getSession({
+    headers: c.req.raw.headers,
+  });
+
   c.set("session", session?.session ?? null);
   c.set("user", session?.user ?? null);
   await next();
@@ -193,17 +231,6 @@ app.post("/api/v1/knives", async (c) => {
     const parsed = knifeInputSchema.parse(await c.req.json());
     const knife = toKnifeRecord(parsed, parsed.id ?? createKnifeId());
     const existing = await getKnife(c.env.DB, user.id, knife.id);
-    const normalizedImages: string[] = [];
-
-    for (const image of knife.images) {
-      if (image.startsWith("data:image/")) {
-        normalizedImages.push(await uploadImageFromDataUrl(c.env, user.id, knife.id, image));
-      } else {
-        normalizedImages.push(image);
-      }
-    }
-
-    knife.images = normalizedImages;
     if (existing) {
       await deleteRemovedManagedImages(c.env, existing.images, knife.images);
     }
@@ -237,17 +264,6 @@ app.patch("/api/v1/knives/:id", async (c) => {
       existing.id,
       { addedAt: existing.addedAt, updatedAt: new Date().toISOString() },
     );
-
-    const normalizedImages: string[] = [];
-    for (const image of merged.images) {
-      if (image.startsWith("data:image/")) {
-        normalizedImages.push(await uploadImageFromDataUrl(c.env, user.id, knifeId, image));
-      } else {
-        normalizedImages.push(image);
-      }
-    }
-
-    merged.images = normalizedImages;
     await deleteRemovedManagedImages(c.env, existing.images, merged.images);
     await upsertKnife(c.env.DB, user.id, merged);
     return c.json({ knife: merged });
@@ -328,16 +344,6 @@ app.post("/api/v1/sync/push", async (c) => {
         updatedAt: item.updatedAt ?? new Date().toISOString(),
       });
 
-      const normalizedImages: string[] = [];
-      for (const image of knife.images) {
-        if (image.startsWith("data:image/")) {
-          normalizedImages.push(await uploadImageFromDataUrl(c.env, user.id, knifeId, image));
-        } else {
-          normalizedImages.push(image);
-        }
-      }
-
-      knife.images = normalizedImages;
       await deleteRemovedManagedImages(c.env, previous?.images ?? [], knife.images);
       await upsertKnife(c.env.DB, user.id, knife);
       seenIds.add(knifeId);
@@ -360,50 +366,51 @@ app.post("/api/v1/sync/push", async (c) => {
   }
 });
 
-app.post("/api/v1/images/upload", async (c) => {
-  const user = await requireUser(c).catch(() => null);
-  if (!user) return c.json({ error: "Unauthorized" }, 401);
-
-  const formData = await c.req.formData();
-  const file = formData.get("file");
-  const knifeId = String(formData.get("knifeId") || createKnifeId());
-  const filename = formData.get("filename");
-
-  if (!(file instanceof File)) {
-    return c.json({ error: "file is required" }, 400);
-  }
-
-  const publicUrl = await uploadImageFromFile(
-    c.env,
-    user.id,
-    knifeId,
-    file,
-    typeof filename === "string" ? filename : undefined,
-  );
-
-  return c.json({ publicUrl, knifeId }, 201);
-});
-
-app.post("/api/v1/images/data-url", async (c) => {
+app.post("/api/v1/images/sign-upload", async (c) => {
   const user = await requireUser(c).catch(() => null);
   if (!user) return c.json({ error: "Unauthorized" }, 401);
 
   try {
-    const parsed = imageDataUrlSchema.parse(await c.req.json());
+    const parsed = imageUploadSignSchema.parse(await c.req.json());
     const knifeId = parsed.knifeId ?? createKnifeId();
-    const publicUrl = await uploadImageFromDataUrl(
+    const signedUpload = await createSignedImageUpload(
       c.env,
       user.id,
       knifeId,
-      parsed.dataUrl,
+      parsed.contentType,
       parsed.filename,
     );
 
-    return c.json({ publicUrl, knifeId }, 201);
+    return c.json({ ...signedUpload, knifeId }, 200);
   } catch (error) {
     return c.json({ error: parseBodyError(error) }, 400);
   }
 });
+
+app.post("/api/v1/images/sign-delete", async (c) => {
+  const user = await requireUser(c).catch(() => null);
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  try {
+    const parsed = imageDeleteSignSchema.parse(await c.req.json());
+    const key = extractManagedKey(c.env, parsed.publicUrl);
+    if (!key) {
+      return c.json({ error: "publicUrl must point to the configured R2 public base URL" }, 400);
+    }
+    if (!key.startsWith(`${buildUserPrefix(user.id)}/`)) {
+      return c.json({ error: "You can only delete your own objects" }, 403);
+    }
+
+    const signedDelete = await createSignedImageDelete(c.env, key);
+    return c.json({ ...signedDelete, key }, 200);
+  } catch (error) {
+    return c.json({ error: parseBodyError(error) }, 400);
+  }
+});
+
+app.post("/api/v1/images/upload", (c) => c.json({ error: DIRECT_UPLOAD_MESSAGE }, 410));
+
+app.post("/api/v1/images/data-url", (c) => c.json({ error: DIRECT_UPLOAD_MESSAGE }, 410));
 
 app.notFound(() => jsonError("Not found", 404));
 app.onError((error) => jsonError(error.message || "Internal server error", 500));
