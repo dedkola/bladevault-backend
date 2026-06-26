@@ -3,7 +3,7 @@ import { cors } from "hono/cors";
 import { z } from "zod";
 import { createAuth } from "./auth";
 import type { Env } from "./env";
-import { getAllowedOrigins } from "./env";
+import { getAllowedOrigins, isAllowedOrigin } from "./env";
 import {
   addCompareId,
   buildSnapshot,
@@ -71,7 +71,7 @@ app.use("*", async (c, next) => {
   return cors({
     origin: (origin) => {
       if (!origin) return allowedOrigins[0] ?? "";
-      return allowedOrigins.includes(origin) ? origin : "";
+      return isAllowedOrigin(origin, c.env) ? origin : "";
     },
     allowHeaders: ["Content-Type", "Authorization"],
     allowMethods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],

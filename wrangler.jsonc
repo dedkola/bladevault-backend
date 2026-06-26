@@ -3,40 +3,34 @@
   "name": "bladevault-backend",
   "main": "src/index.ts",
   "compatibility_date": "2026-06-25",
-  "compatibility_flags": [
-    "nodejs_compat"
-  ],
+  "compatibility_flags": ["nodejs_compat"],
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "bladevault",
-      "database_id": "replace-me",
-      "remote": true
-    }
+      "database_id": "c8197b2b-bb48-4617-beab-69512252d986",
+      "remote": true,
+    },
   ],
   "r2_buckets": [
     {
       "binding": "BUCKET",
-      "bucket_name": "replace-me",
-      "remote": true
-    }
+      "bucket_name": "bladevault-backend",
+      "remote": true,
+    },
   ],
   "vars": {
     "APP_NAME": "BladeVault",
-    "BETTER_AUTH_URL": "http://localhost:8787",
+    "BETTER_AUTH_URL": "https://api-staging.tkweb.site",
     "COOKIE_DOMAIN": "",
-    "CORS_ORIGIN": "http://localhost:3000",
-    "FRONTEND_URL": "http://localhost:3000",
-    "R2_PUBLIC_BASE_URL": "https://example.r2.dev"
+    "CORS_ORIGIN": "https://app-staging.bladevault.tkweb.site,http://localhost:*,http://127.0.0.1:*",
+    "FRONTEND_URL": "https://app-staging.bladevault.tkweb.site,http://localhost:*,http://127.0.0.1:*",
+    "R2_PUBLIC_BASE_URL": "https://r2.img.bladevault.backend.tkweb.site",
   },
   "observability": {
-    "enabled": true
+    "enabled": true,
   },
   "secrets": {
-    "required": [
-      "BETTER_AUTH_SECRET",
-      "RESEND_API_KEY",
-      "RESEND_FROM_EMAIL"
-    ]
-  }
+    "required": ["BETTER_AUTH_SECRET", "BETTER_AUTH_API_KEY", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"],
+  },
 }

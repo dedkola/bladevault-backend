@@ -1,18 +1,19 @@
 import { betterAuth, type BetterAuthOptions } from "better-auth";
+import { dash } from "@better-auth/infra";
 import { deleteUserPrefix } from "./storage";
 import { getAllowedOrigins, isHttpsUrl, type Env } from "./env";
-import { sendResetPasswordEmail, sendVerificationEmail } from "./email";
 
 type RuntimeEnv = Pick<
   Env,
   | "APP_NAME"
+  | "BETTER_AUTH_API_KEY"
   | "BETTER_AUTH_SECRET"
   | "BETTER_AUTH_URL"
   | "COOKIE_DOMAIN"
   | "CORS_ORIGIN"
   | "FRONTEND_URL"
-  | "RESEND_API_KEY"
-  | "RESEND_FROM_EMAIL"
+  | "GOOGLE_CLIENT_ID"
+  | "GOOGLE_CLIENT_SECRET"
 > & {
   DB: BetterAuthOptions["database"];
   BUCKET?: R2Bucket;
@@ -20,13 +21,31 @@ type RuntimeEnv = Pick<
 };
 
 export function buildAuthOptions(env: RuntimeEnv): BetterAuthOptions {
+  const plugins = env.BETTER_AUTH_API_KEY
+    ? [
+        dash({
+          apiKey: env.BETTER_AUTH_API_KEY,
+        }),
+      ]
+    : [];
+
   return {
     appName: env.APP_NAME,
     baseURL: env.BETTER_AUTH_URL,
     basePath: "/api/auth",
     secret: env.BETTER_AUTH_SECRET,
     database: env.DB,
+    plugins,
     trustedOrigins: getAllowedOrigins(env),
+    socialProviders:
+      env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
+        ? {
+            google: {
+              clientId: env.GOOGLE_CLIENT_ID,
+              clientSecret: env.GOOGLE_CLIENT_SECRET,
+            },
+          }
+        : undefined,
     advanced: {
       trustedProxyHeaders: true,
       useSecureCookies: isHttpsUrl(env.BETTER_AUTH_URL),
@@ -41,30 +60,7 @@ export function buildAuthOptions(env: RuntimeEnv): BetterAuthOptions {
         : undefined,
     },
     emailAndPassword: {
-      enabled: true,
-      minPasswordLength: 8,
-      maxPasswordLength: 128,
-      requireEmailVerification: true,
-      autoSignIn: false,
-      sendResetPassword: async ({ user, url }) => {
-        await sendResetPasswordEmail(env, {
-          email: user.email,
-          name: user.name,
-          url,
-        });
-      },
-    },
-    emailVerification: {
-      sendOnSignUp: true,
-      sendOnSignIn: true,
-      autoSignInAfterVerification: true,
-      sendVerificationEmail: async ({ user, url }) => {
-        await sendVerificationEmail(env, {
-          email: user.email,
-          name: user.name,
-          url,
-        });
-      },
+      enabled: false,
     },
     user: {
       deleteUser: {
