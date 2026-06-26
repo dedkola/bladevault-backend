@@ -7,3 +7,19 @@ node_modules
 dist
 .wrangler-*
 wrangler.jsonc
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Playwright
+playwright-report/
+test-results/
+blob-report/
+
+# Secrets
+*.pem
+*.key
+*.p12
+*.pfx
