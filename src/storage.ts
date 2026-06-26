@@ -3,6 +3,13 @@ import type { Env } from "./env";
 const SAFE_FILENAME = /[^a-zA-Z0-9._-]/g;
 
 function toArrayBuffer(base64: string): ArrayBuffer {
+  const nativeFromBase64 = (Uint8Array as Uint8ArrayConstructor & {
+    fromBase64?: (input: string) => Uint8Array;
+  }).fromBase64;
+  if (typeof nativeFromBase64 === "function") {
+    return Uint8Array.from(nativeFromBase64(base64)).buffer;
+  }
+
   const binary = atob(base64);
   const bytes = new Uint8Array(binary.length);
   for (let index = 0; index < binary.length; index += 1) {
@@ -127,8 +134,9 @@ export async function uploadImageFromFile(
     : cleanFilePart(file.name || randomFilename("image", extension));
   const resolvedFilename = nextFilename.includes(".") ? nextFilename : `${nextFilename}.${extension}`;
   const key = buildKnifeKey(userId, knifeId, resolvedFilename);
+  const body = typeof file.stream === "function" ? file.stream() : file;
 
-  await env.BUCKET.put(key, await file.arrayBuffer(), {
+  await env.BUCKET.put(key, body, {
     httpMetadata: {
       contentType: file.type || inferContentTypeFromExtension(extension),
     },
