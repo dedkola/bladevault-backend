@@ -97,6 +97,7 @@ npm run dev
 - Configure the Google OAuth redirect URI as:
   - `https://api-staging.tkweb.site/api/auth/callback/google`
 - `CORS_ORIGIN` and `FRONTEND_URL` can be a comma-separated list of frontend origins or wildcard localhost patterns, for example `https://app-staging.bladevault.tkweb.site,http://localhost:*,http://127.0.0.1:*`
+- Local development origins are also accepted automatically for auth and CORS when they use loopback, Docker hostnames, or private-network addresses such as `192.168.x.x`, `10.x.x.x`, and `172.16.x.x` through `172.31.x.x`
 - `R2_PUBLIC_BASE_URL` should be the public URL for your bucket or custom domain
 
 ## Managing Wrangler and future deploys

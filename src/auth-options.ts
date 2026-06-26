@@ -2,7 +2,7 @@ import { betterAuth, type BetterAuthOptions } from "better-auth";
 import { dash } from "@better-auth/infra";
 import { bearer, oauthPopup } from "better-auth/plugins";
 import { deleteUserPrefix } from "./storage";
-import { getAllowedOrigins, isHttpsUrl, type Env } from "./env";
+import { getAllowedOriginsForRequest, isHttpsUrl, type Env } from "./env";
 
 type RuntimeEnv = Pick<
   Env,
@@ -39,7 +39,7 @@ export function buildAuthOptions(env: RuntimeEnv): BetterAuthOptions {
     secret: env.BETTER_AUTH_SECRET,
     database: env.DB,
     plugins,
-    trustedOrigins: getAllowedOrigins(env),
+    trustedOrigins: async (request) => getAllowedOriginsForRequest(env, request),
     socialProviders:
       env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
         ? {
