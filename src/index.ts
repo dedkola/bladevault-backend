@@ -66,6 +66,10 @@ async function requireUser(c: Context<AppType>) {
 
 const app = new Hono<AppType>();
 
+const googleStartQuerySchema = z.object({
+  callbackURL: z.string().url(),
+});
+
 app.use("*", async (c, next) => {
   const allowedOrigins = getAllowedOrigins(c.env);
   return cors({
@@ -107,6 +111,58 @@ app.get("/api/health", (c) =>
     now: new Date().toISOString(),
   }),
 );
+
+app.get("/api/auth/google/start", async (c) => {
+  const parsed = googleStartQuerySchema.safeParse({
+    callbackURL: c.req.query("callbackURL"),
+  });
+
+  if (!parsed.success) {
+    return c.json({ error: "Valid callbackURL is required" }, 400);
+  }
+
+  const auth = c.get("auth");
+  const signInRequest = new Request(`${c.env.BETTER_AUTH_URL}/api/auth/sign-in/social`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      provider: "google",
+      callbackURL: parsed.data.callbackURL,
+      newUserCallbackURL: parsed.data.callbackURL,
+      errorCallbackURL: parsed.data.callbackURL,
+      disableRedirect: true,
+    }),
+  });
+
+  const signInResponse = await auth.handler(signInRequest);
+  if (!signInResponse.ok) {
+    const body = await signInResponse.text();
+    return new Response(body, {
+      status: signInResponse.status,
+      headers: signInResponse.headers,
+    });
+  }
+
+  const data = (await signInResponse.json()) as { url?: string };
+  if (!data.url) {
+    return c.json({ error: "Google sign-in URL was not returned by Better Auth" }, 500);
+  }
+
+  const headers = new Headers({
+    Location: data.url,
+  });
+  const setCookie = signInResponse.headers.get("set-cookie");
+  if (setCookie) {
+    headers.append("set-cookie", setCookie);
+  }
+
+  return new Response(null, {
+    status: 302,
+    headers,
+  });
+});
 
 app.all("/api/auth/*", (c) => {
   const auth = c.get("auth");

@@ -51,7 +51,7 @@ export function matchesOriginPattern(origin: string, pattern: string): boolean {
   }
 
   const patternRegex = new RegExp(
-    `^${escapeRegExp(normalizedPattern).replaceAll("\\*", ".*").replaceAll("\\?", ".")}$`,
+    `^${escapeRegExp(normalizedPattern).replaceAll("*", ".*").replaceAll("?", ".")}$`,
   );
 
   return patternRegex.test(normalizedOrigin);

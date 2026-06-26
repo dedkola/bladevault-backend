@@ -1,5 +1,6 @@
 import { betterAuth, type BetterAuthOptions } from "better-auth";
 import { dash } from "@better-auth/infra";
+import { bearer, oauthPopup } from "better-auth/plugins";
 import { deleteUserPrefix } from "./storage";
 import { getAllowedOrigins, isHttpsUrl, type Env } from "./env";
 
@@ -26,8 +27,10 @@ export function buildAuthOptions(env: RuntimeEnv): BetterAuthOptions {
         dash({
           apiKey: env.BETTER_AUTH_API_KEY,
         }),
+        bearer(),
+        oauthPopup(),
       ]
-    : [];
+    : [bearer(), oauthPopup()];
 
   return {
     appName: env.APP_NAME,
@@ -49,6 +52,9 @@ export function buildAuthOptions(env: RuntimeEnv): BetterAuthOptions {
     advanced: {
       trustedProxyHeaders: true,
       useSecureCookies: isHttpsUrl(env.BETTER_AUTH_URL),
+      defaultCookieAttributes: {
+        sameSite: "none",
+      },
       ipAddress: {
         ipAddressHeaders: ["cf-connecting-ip", "x-forwarded-for", "x-real-ip"],
       },
