@@ -63,6 +63,12 @@ async function handleRequest(request, response) {
 
     if (request.method === "PUT" && url.pathname === "/backup/latest") {
       const auth = await requireAuth(request);
+      const declaredContentLength = parseContentLength(request.headers["content-length"]);
+      if (declaredContentLength !== null && declaredContentLength > config.maxBackupSizeBytes) {
+        return sendJson(response, 413, {
+          error: `Backup exceeds ${Math.floor(config.maxBackupSizeBytes / (1024 * 1024))} MB limit.`,
+        });
+      }
       const body = await readRequestBody(request, config.maxBackupSizeBytes);
 
       if (body.length === 0) {
@@ -225,7 +231,9 @@ function handlePreflight(request, response, origin) {
 
 function getAllowedOrigin(origin) {
   if (!origin) return null;
-  return config.allowedClientOrigins.some((pattern) => matchesOriginPattern(origin, pattern)) ? origin : null;
+  return isLocalDevelopmentOrigin(origin) || config.allowedClientOrigins.some((pattern) => matchesOriginPattern(origin, pattern))
+    ? origin
+    : null;
 }
 
 function matchesOriginPattern(origin, pattern) {
@@ -239,6 +247,61 @@ function matchesOriginPattern(origin, pattern) {
   const escaped = normalizedPattern.replace(/[|\\{}()[\]^$+?.]/g, "\\$&");
   const regex = new RegExp(`^${escaped.replaceAll("*", ".*").replaceAll("?", ".")}$`);
   return regex.test(normalizedOrigin);
+}
+
+const LOCAL_DEV_HOSTS = new Set(["localhost", "host.docker.internal", "gateway.docker.internal"]);
+
+function parseUrl(value) {
+  try {
+    return new URL(value);
+  } catch {
+    return null;
+  }
+}
+
+function normalizeHostname(hostname) {
+  return hostname.toLowerCase().replace(/^\[|\]$/g, "");
+}
+
+function isIpv4Address(hostname) {
+  const parts = hostname.split(".");
+  if (parts.length !== 4) return false;
+  return parts.every((part) => /^\d{1,3}$/.test(part) && Number(part) >= 0 && Number(part) <= 255);
+}
+
+function isPrivateOrLoopbackIpv4(hostname) {
+  if (!isIpv4Address(hostname)) return false;
+
+  const [first, second] = hostname.split(".").map(Number);
+  return (
+    first === 0 ||
+    first === 10 ||
+    first === 127 ||
+    (first === 169 && second === 254) ||
+    (first === 172 && second >= 16 && second <= 31) ||
+    (first === 192 && second === 168)
+  );
+}
+
+function isLoopbackOrPrivateIpv6(hostname) {
+  if (!hostname.includes(":")) return false;
+  return hostname === "::1" || hostname.startsWith("fc") || hostname.startsWith("fd") || hostname.startsWith("fe80:");
+}
+
+function isLocalDevelopmentOrigin(value) {
+  const url = parseUrl(value);
+  if (!url) return false;
+  if (url.protocol !== "http:" && url.protocol !== "https:") return false;
+
+  const hostname = normalizeHostname(url.hostname);
+  if (!hostname) return false;
+
+  return (
+    LOCAL_DEV_HOSTS.has(hostname) ||
+    hostname.endsWith(".localhost") ||
+    isPrivateOrLoopbackIpv4(hostname) ||
+    isLoopbackOrPrivateIpv6(hostname)
+  );
 }
 
 async function requireAuth(request) {
@@ -280,6 +343,18 @@ function readBearerToken(value) {
   return token.trim();
 }
 
+function parseContentLength(value) {
+  if (Array.isArray(value)) {
+    return parseContentLength(value[0]);
+  }
+  if (typeof value !== "string" || value.trim().length === 0) {
+    return null;
+  }
+
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+}
+
 function isTarGzipFile(buffer) {
   return buffer.length >= 2 && buffer[0] === 0x1f && buffer[1] === 0x8b;
 }
@@ -288,20 +363,42 @@ async function readRequestBody(request, maxBytes) {
   return await new Promise((resolve, reject) => {
     let size = 0;
     const chunks = [];
+    let finished = false;
 
-    request.on("data", (chunk) => {
+    const finishWithError = (error) => {
+      if (finished) return;
+      finished = true;
+      request.removeListener("data", onData);
+      request.removeListener("end", onEnd);
+      request.removeListener("error", onError);
+      request.removeListener("aborted", onAborted);
+      reject(error);
+    };
+
+    const onData = (chunk) => {
+      if (finished) return;
+
       size += chunk.length;
       if (size > maxBytes) {
-        reject(httpError(413, `Backup exceeds ${Math.floor(maxBytes / (1024 * 1024))} MB limit.`));
-        request.destroy();
+        finishWithError(httpError(413, `Backup exceeds ${Math.floor(maxBytes / (1024 * 1024))} MB limit.`));
         return;
       }
       chunks.push(chunk);
-    });
+    };
 
-    request.on("end", () => resolve(Buffer.concat(chunks)));
-    request.on("error", reject);
-    request.on("aborted", () => reject(httpError(499, "Request was aborted.")));
+    const onEnd = () => {
+      if (finished) return;
+      finished = true;
+      resolve(Buffer.concat(chunks));
+    };
+
+    const onError = (error) => finishWithError(error);
+    const onAborted = () => finishWithError(httpError(499, "Request was aborted."));
+
+    request.on("data", onData);
+    request.on("end", onEnd);
+    request.on("error", onError);
+    request.on("aborted", onAborted);
   });
 }
 
