@@ -4,6 +4,12 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-06-25",
   "compatibility_flags": ["nodejs_compat"],
+  "routes": [
+    {
+      "pattern": "auth.tkweb.site",
+      "custom_domain": true
+    }
+  ],
   "d1_databases": [
     {
       "binding": "DB",
