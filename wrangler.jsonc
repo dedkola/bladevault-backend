@@ -12,23 +12,11 @@
       "remote": true,
     },
   ],
-  "r2_buckets": [
-    {
-      "binding": "BUCKET",
-      "bucket_name": "bladevault-backend",
-      "remote": true,
-    },
-  ],
   "vars": {
     "APP_NAME": "BladeVault",
-    "BETTER_AUTH_URL": "https://api-staging.tkweb.site",
-    "CLOUDFLARE_ACCOUNT_ID": "73026fc18aa364a3cc60305b6c6fb75c",
+    "AUTH_PUBLIC_BASE_URL": "https://auth.tkweb.site",
+    "ALLOWED_CLIENT_ORIGINS": "http://localhost:*,http://127.0.0.1:*,http://[::1]:*",
     "COOKIE_DOMAIN": "",
-    "CORS_ORIGIN": "https://app-staging.bladevault.tkweb.site,http://localhost:*,http://127.0.0.1:*",
-    "FRONTEND_URL": "https://app-staging.bladevault.tkweb.site,http://localhost:*,http://127.0.0.1:*",
-    "R2_BUCKET_NAME": "bladevault-backend",
-    "R2_PUBLIC_BASE_URL": "https://r2.img.bladevault.backend.tkweb.site",
-    "R2_SIGNED_URL_TTL_SECONDS": "300",
   },
   "observability": {
     "enabled": true,
@@ -36,11 +24,8 @@
   "secrets": {
     "required": [
       "BETTER_AUTH_SECRET",
-      "BETTER_AUTH_API_KEY",
       "GOOGLE_CLIENT_ID",
-      "GOOGLE_CLIENT_SECRET",
-      "R2_ACCESS_KEY_ID",
-      "R2_SECRET_ACCESS_KEY"
+      "GOOGLE_CLIENT_SECRET"
     ],
   },
 }

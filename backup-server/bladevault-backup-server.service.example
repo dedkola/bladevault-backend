@@ -1,0 +1,18 @@
+[Unit]
+Description=BladeVault Backup Server
+After=network.target
+
+[Service]
+Type=simple
+User=bladevault
+Group=bladevault
+WorkingDirectory=/opt/bladevault-backup-server
+EnvironmentFile=/opt/bladevault-backup-server/.env
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
