@@ -1,46 +1,64 @@
 # Ubuntu 24 Backup Server Setup
 
-This guide prepares the Linux server that will store per-user BladeVault backup archives.
+This is the step-by-step server setup guide for the BladeVault Linux backup API.
 
-## Goal
+Use this when you want to provision a fresh Ubuntu 24 host for:
 
-Host a backup API on a configurable public domain such as:
+- `https://backup.example.com`
 
-- `https://backup.bladevault.app`
+The auth Worker stays on Cloudflare and is documented separately in:
 
-Expected API shape:
+- [docs/architecture.md](/Users/kolasokol/Code/bladevault-backend/docs/architecture.md)
+- [README.md](/Users/kolasokol/Code/bladevault-backend/README.md)
+
+## What This Server Does
+
+The Ubuntu server stores the uploaded BladeVault `data/` folder as a `tar.gz`
+archive per authenticated user.
+
+Routes:
 
 - `GET /health`
 - `GET /backup/meta`
+- `GET /backup/history`
 - `PUT /backup/latest`
 - `GET /backup/latest`
-- optional `GET /backup/history`
 
-## Prerequisites
+## Required Paths
 
-- Ubuntu 24 server
+These are the expected final paths on the Ubuntu server:
+
+- app root: `/opt/bladevault-backup-server`
+- backup storage root: `/var/lib/bladevault-backups`
+- backup env file: `/opt/bladevault-backup-server/.env`
+- systemd unit: `/etc/systemd/system/bladevault-backup-server.service`
+- Caddy config: `/etc/caddy/Caddyfile`
+
+## 1. Prerequisites
+
+- Ubuntu 24
+- public DNS control for `backup.example.com`
 - SSH access
-- DNS control for `backup.bladevault.app`
-- one fixed auth domain already configured in the Worker, e.g. `https://auth.bladevault.app`
+- one auth Worker domain already working, for example `https://auth.example.com`
 
-## 1. Create deploy user
-
-```bash
-adduser bladevault
-usermod -aG sudo bladevault
-```
-
-Install your SSH public key:
+## 2. Create Service User
 
 ```bash
-mkdir -p /home/bladevault/.ssh
-chmod 700 /home/bladevault/.ssh
-nano /home/bladevault/.ssh/authorized_keys
-chmod 600 /home/bladevault/.ssh/authorized_keys
-chown -R bladevault:bladevault /home/bladevault/.ssh
+sudo adduser bladevault
+sudo usermod -aG sudo bladevault
 ```
 
-## 2. Harden SSH
+Install the SSH public key:
+
+```bash
+sudo mkdir -p /home/bladevault/.ssh
+sudo chmod 700 /home/bladevault/.ssh
+sudo nano /home/bladevault/.ssh/authorized_keys
+sudo chmod 600 /home/bladevault/.ssh/authorized_keys
+sudo chown -R bladevault:bladevault /home/bladevault/.ssh
+```
+
+## 3. Harden SSH
 
 Edit:
 
@@ -48,7 +66,7 @@ Edit:
 sudo nano /etc/ssh/sshd_config
 ```
 
-Recommended minimum changes:
+Recommended minimum settings:
 
 - `PasswordAuthentication no`
 - `PermitRootLogin no`
@@ -59,7 +77,7 @@ Restart SSH:
 sudo systemctl restart ssh
 ```
 
-## 3. Enable firewall
+## 4. Firewall
 
 ```bash
 sudo ufw allow OpenSSH
@@ -69,7 +87,7 @@ sudo ufw enable
 sudo ufw status
 ```
 
-## 4. Install runtime packages
+## 5. Install Packages
 
 ```bash
 sudo apt update
@@ -94,14 +112,14 @@ sudo apt update
 sudo apt install -y caddy
 ```
 
-## 5. Create app and storage directories
+## 6. Create Directories
 
 ```bash
 sudo mkdir -p /opt/bladevault-backup-server
 sudo mkdir -p /var/lib/bladevault-backups
 sudo chown -R bladevault:bladevault /opt/bladevault-backup-server
 sudo chown -R bladevault:bladevault /var/lib/bladevault-backups
-chmod 750 /var/lib/bladevault-backups
+sudo chmod 750 /var/lib/bladevault-backups
 ```
 
 Expected storage layout:
@@ -112,88 +130,177 @@ Expected storage layout:
     latest.tar.gz
     metadata.json
     history/
+      2026-06-27T11-00-00-000Z.tar.gz
 ```
 
-## 6. DNS
+## 7. Point DNS
 
 Point:
 
-- `backup.bladevault.app`
+- `backup.example.com`
 
 to the Ubuntu server public IP.
 
-## 7. Environment the backup server will need
+Recommended:
 
-Create an env file later for the backup API with at least:
+- keep the auth domain on Cloudflare Worker routing
+- keep the backup domain pointed straight to Ubuntu
 
-```env
-BACKUP_PUBLIC_BASE_URL=https://backup.bladevault.app
-BACKUP_STORAGE_ROOT=/var/lib/bladevault-backups
-AUTH_JWT_ISSUER=https://auth.bladevault.app
-AUTH_JWT_AUDIENCE=https://auth.bladevault.app
-AUTH_JWKS_URL=https://auth.bladevault.app/api/auth/jwks
-MAX_BACKUP_SIZE_MB=0
-ALLOWED_CLIENT_ORIGINS=*
-HOST=127.0.0.1
-PORT=8080
-```
+## 8. Copy App Files
 
-`ALLOWED_CLIENT_ORIGINS` is needed because the browser frontend calls the backup
-domain directly and sends `Authorization` headers. Use `*` if you want to allow
-all frontend origins. `MAX_BACKUP_SIZE_MB=0` disables the app-level upload cap.
-
-## 8. Reverse proxy target
-
-The Node backup API should listen only on localhost, for example:
-
-- `127.0.0.1:8080`
-
-Caddy terminates TLS and proxies to that port.
-
-Example Caddyfile:
-
-```caddy
-backup.bladevault.app {
-  reverse_proxy 127.0.0.1:8080
-}
-```
-
-Then:
-
-```bash
-sudo systemctl reload caddy
-```
-
-## 9. Systemd service target
-
-The backup API should later run as a service, for example:
-
-- working directory: `/opt/bladevault-backup-server`
-- user: `bladevault`
-- group: `bladevault`
-- command: `node server.js`
-
-The implementation in this repo lives in:
+Copy these files from this repo to `/opt/bladevault-backup-server`:
 
 - [backup-server/server.js](/Users/kolasokol/Code/bladevault-backend/backup-server/server.js)
 - [backup-server/package.json](/Users/kolasokol/Code/bladevault-backend/backup-server/package.json)
+- [backup-server/package-lock.json](/Users/kolasokol/Code/bladevault-backend/backup-server/package-lock.json)
 - [backup-server/.env.example](/Users/kolasokol/Code/bladevault-backend/backup-server/.env.example)
+- [backup-server/bladevault-backup-server.service.example](/Users/kolasokol/Code/bladevault-backend/backup-server/bladevault-backup-server.service.example)
 
-Suggested deploy steps:
+Install dependencies:
 
 ```bash
 cd /opt/bladevault-backup-server
 npm ci --omit=dev
-node server.js
 ```
 
-## 10. Acceptance checklist
+## 9. Create `/opt/bladevault-backup-server/.env`
+
+```env
+BACKUP_PUBLIC_BASE_URL=https://backup.example.com
+AUTH_JWT_ISSUER=https://auth.example.com
+AUTH_JWT_AUDIENCE=https://auth.example.com
+AUTH_JWKS_URL=https://auth.example.com/api/auth/jwks
+BACKUP_STORAGE_ROOT=/var/lib/bladevault-backups
+MAX_BACKUP_SIZE_MB=0
+ALLOWED_CLIENT_ORIGINS=*
+HOST=127.0.0.1
+PORT=8080
+NODE_ENV=production
+```
+
+Meaning:
+
+- `BACKUP_PUBLIC_BASE_URL`
+  public backup API domain
+- `AUTH_JWT_ISSUER`
+  auth Worker JWT issuer
+- `AUTH_JWT_AUDIENCE`
+  should match the Worker JWT audience
+- `AUTH_JWKS_URL`
+  public JWKS endpoint from the auth Worker
+- `BACKUP_STORAGE_ROOT`
+  persistent backup storage directory
+- `MAX_BACKUP_SIZE_MB=0`
+  disables app-level upload limit
+- `ALLOWED_CLIENT_ORIGINS=*`
+  allows all browser origins
+- `HOST=127.0.0.1`
+  keeps Node private behind Caddy
+- `PORT=8080`
+  local Node listener
+
+## 10. Install systemd Service
+
+The example service file in this repo uses:
+
+- user: `bladevault`
+- group: `bladevault`
+- working directory: `/opt/bladevault-backup-server`
+- env file: `/opt/bladevault-backup-server/.env`
+- command: `/usr/bin/node server.js`
+
+Install it:
+
+```bash
+sudo cp /opt/bladevault-backup-server/bladevault-backup-server.service.example /etc/systemd/system/bladevault-backup-server.service
+sudo systemctl daemon-reload
+sudo systemctl enable bladevault-backup-server
+sudo systemctl start bladevault-backup-server
+```
+
+Verify:
+
+```bash
+sudo systemctl status bladevault-backup-server --no-pager
+curl http://127.0.0.1:8080/health
+```
+
+## 11. Configure Caddy
+
+Example `/etc/caddy/Caddyfile`:
+
+```caddy
+backup.example.com {
+  reverse_proxy 127.0.0.1:8080
+}
+```
+
+Validate and reload:
+
+```bash
+sudo caddy validate --config /etc/caddy/Caddyfile
+sudo systemctl reload caddy
+```
+
+Public check:
+
+```bash
+curl -I https://backup.example.com/health
+```
+
+## 12. Deploy Updates Later
+
+When the backup server code changes:
+
+1. copy updated files into `/opt/bladevault-backup-server`
+2. run `npm ci --omit=dev` if dependencies changed
+3. restart the service
+
+Typical update commands:
+
+```bash
+cd /opt/bladevault-backup-server
+npm ci --omit=dev
+sudo systemctl restart bladevault-backup-server
+sudo systemctl status bladevault-backup-server --no-pager
+```
+
+## 13. Operational Checks
+
+Health:
+
+```bash
+curl http://127.0.0.1:8080/health
+curl -I https://backup.example.com/health
+```
+
+Logs:
+
+```bash
+sudo journalctl -u bladevault-backup-server -n 200 --no-pager
+sudo journalctl -u caddy -n 200 --no-pager
+```
+
+Stored files:
+
+```bash
+sudo find /var/lib/bladevault-backups -maxdepth 3 -type f | sort
+```
+
+## 14. Acceptance Checklist
 
 - SSH key login works
 - password SSH login is disabled
 - firewall allows only `22`, `80`, `443`
-- `backup.bladevault.app` resolves correctly
+- `backup.example.com` resolves correctly
 - Caddy serves HTTPS successfully
-- `/var/lib/bladevault-backups` exists and is writable by the app user
+- `/var/lib/bladevault-backups` exists and is writable by `bladevault`
 - the backup API binds to `127.0.0.1:8080`
-- `curl -I https://backup.bladevault.app/health` returns `200`
+- `curl -I https://backup.example.com/health` returns `200`
+- a real backup creates `latest.tar.gz` and `metadata.json`
+- restore works from `GET /backup/latest`
+
+## Related Docs
+
+- [docs/architecture.md](/Users/kolasokol/Code/bladevault-backend/docs/architecture.md)
+- [docs/migration-to-linux-backup-server.md](/Users/kolasokol/Code/bladevault-backend/docs/migration-to-linux-backup-server.md)
