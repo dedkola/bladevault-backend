@@ -2,6 +2,8 @@
 
 Minimal Node.js backup API for Ubuntu 24.
 
+The server stores the uploaded BladeVault `data/` folder as a `tar.gz` archive per user.
+
 ## Routes
 
 - `GET /health`

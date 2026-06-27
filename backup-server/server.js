@@ -69,8 +69,8 @@ async function handleRequest(request, response) {
         return sendJson(response, 400, { error: "Backup file is empty." });
       }
 
-      if (!isSqliteFile(body)) {
-        return sendJson(response, 400, { error: "Backup file is not a valid SQLite database." });
+      if (!isTarGzipFile(body)) {
+        return sendJson(response, 400, { error: "Backup file is not a valid tar.gz archive." });
       }
 
       const result = await storeLatestBackup(auth.userId, body, request.headers["x-backup-filename"]);
@@ -83,7 +83,8 @@ async function handleRequest(request, response) {
 
     if (request.method === "GET" && url.pathname === "/backup/latest") {
       const auth = await requireAuth(request);
-      const latestPath = path.join(getUserDirectory(auth.userId), "latest.sqlite");
+      const metadata = await readMetadata(auth.userId);
+      const latestPath = path.join(getUserDirectory(auth.userId), "latest.tar.gz");
 
       let stat;
       try {
@@ -95,7 +96,8 @@ async function handleRequest(request, response) {
       const file = await fs.readFile(latestPath);
       response.statusCode = 200;
       response.setHeader("Content-Type", "application/octet-stream");
-      response.setHeader("Content-Disposition", 'attachment; filename="bladevault.sqlite"');
+      const fileName = metadata.latest?.fileName || "bladevault-data.tar.gz";
+      response.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
       response.setHeader("Content-Length", String(stat.size));
       response.setHeader("Cache-Control", "no-store");
       response.end(file);
@@ -278,9 +280,8 @@ function readBearerToken(value) {
   return token.trim();
 }
 
-function isSqliteFile(buffer) {
-  const header = buffer.subarray(0, 15).toString("utf8");
-  return header === "SQLite format 3";
+function isTarGzipFile(buffer) {
+  return buffer.length >= 2 && buffer[0] === 0x1f && buffer[1] === 0x8b;
 }
 
 async function readRequestBody(request, maxBytes) {
@@ -317,11 +318,11 @@ async function ensureUserDirectories(userId) {
 
 async function storeLatestBackup(userId, body, requestedFileName) {
   const { userDir, historyDir } = await ensureUserDirectories(userId);
-  const latestPath = path.join(userDir, "latest.sqlite");
-  const tempPath = path.join(userDir, "latest.sqlite.uploading");
+  const latestPath = path.join(userDir, "latest.tar.gz");
+  const tempPath = path.join(userDir, "latest.tar.gz.uploading");
   const now = new Date();
   const timestamp = createTimestamp(now);
-  const historyPath = path.join(historyDir, `${timestamp}.sqlite`);
+  const historyPath = path.join(historyDir, `${timestamp}.tar.gz`);
   const metadataPath = path.join(userDir, "metadata.json");
 
   const previousMetadata = await readMetadata(userId);
@@ -364,15 +365,15 @@ function sanitizeFileName(value) {
     return sanitizeFileName(value[0]);
   }
   if (typeof value !== "string" || value.trim().length === 0) {
-    return "bladevault.sqlite";
+    return "bladevault-data.tar.gz";
   }
-  return value.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 120) || "bladevault.sqlite";
+  return value.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 120) || "bladevault-data.tar.gz";
 }
 
 async function readMetadata(userId) {
   const userDir = getUserDirectory(userId);
   const metadataPath = path.join(userDir, "metadata.json");
-  const latestPath = path.join(userDir, "latest.sqlite");
+  const latestPath = path.join(userDir, "latest.tar.gz");
 
   const base = {
     userId,
@@ -401,7 +402,7 @@ async function readMetadata(userId) {
       ...base,
       updatedAt: stat.mtime.toISOString(),
       latest: {
-        fileName: "bladevault.sqlite",
+        fileName: "bladevault-data.tar.gz",
         storedAt: stat.mtime.toISOString(),
         sizeBytes: stat.size,
         sha256: null,

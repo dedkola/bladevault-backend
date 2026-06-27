@@ -1,6 +1,6 @@
 # Ubuntu 24 Backup Server Setup
 
-This guide prepares the Linux server that will store per-user BladeVault SQLite backup files.
+This guide prepares the Linux server that will store per-user BladeVault backup archives.
 
 ## Goal
 
@@ -109,7 +109,7 @@ Expected storage layout:
 ```text
 /var/lib/bladevault-backups/
   <userId>/
-    latest.sqlite
+    latest.tar.gz
     metadata.json
     history/
 ```
