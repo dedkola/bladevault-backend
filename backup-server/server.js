@@ -1,5 +1,5 @@
-import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { createHash, randomUUID } from "node:crypto";
+import { createWriteStream, readFileSync } from "node:fs";
 import fs from "node:fs/promises";
 import { createServer } from "node:http";
 import path from "node:path";
@@ -64,22 +64,30 @@ async function handleRequest(request, response) {
     if (request.method === "PUT" && url.pathname === "/backup/latest") {
       const auth = await requireAuth(request);
       const declaredContentLength = parseContentLength(request.headers["content-length"]);
-      if (declaredContentLength !== null && declaredContentLength > config.maxBackupSizeBytes) {
+      if (
+        config.maxBackupSizeBytes !== null &&
+        declaredContentLength !== null &&
+        declaredContentLength > config.maxBackupSizeBytes
+      ) {
         return sendJson(response, 413, {
           error: `Backup exceeds ${Math.floor(config.maxBackupSizeBytes / (1024 * 1024))} MB limit.`,
         });
       }
-      const body = await readRequestBody(request, config.maxBackupSizeBytes);
 
-      if (body.length === 0) {
+      const { userDir } = await ensureUserDirectories(auth.userId);
+      const uploadPath = path.join(userDir, `upload-${Date.now()}-${randomUUID()}.tar.gz.part`);
+      const upload = await writeRequestBodyToTempFile(request, uploadPath, config.maxBackupSizeBytes);
+
+      if (upload.size === 0) {
         return sendJson(response, 400, { error: "Backup file is empty." });
       }
 
-      if (!isTarGzipFile(body)) {
+      if (!isTarGzipFile(upload.headerBytes)) {
+        await fs.rm(upload.tempPath, { force: true }).catch(() => {});
         return sendJson(response, 400, { error: "Backup file is not a valid tar.gz archive." });
       }
 
-      const result = await storeLatestBackup(auth.userId, body, request.headers["x-backup-filename"]);
+      const result = await storeLatestBackup(auth.userId, upload, request.headers["x-backup-filename"]);
       return sendJson(response, 200, {
         ok: true,
         user: auth.user,
@@ -131,7 +139,7 @@ function loadConfig() {
   const backupStorageRoot = requireEnv("BACKUP_STORAGE_ROOT");
   const host = process.env.HOST?.trim() || "127.0.0.1";
   const port = parseInteger(process.env.PORT, 8080, "PORT");
-  const maxBackupSizeMb = parseInteger(process.env.MAX_BACKUP_SIZE_MB, 50, "MAX_BACKUP_SIZE_MB");
+  const maxBackupSizeMb = parseOptionalLimitMb(process.env.MAX_BACKUP_SIZE_MB, 50, "MAX_BACKUP_SIZE_MB");
   const allowedClientOrigins = splitCsv(process.env.ALLOWED_CLIENT_ORIGINS);
 
   return {
@@ -142,7 +150,8 @@ function loadConfig() {
     backupStorageRoot: path.resolve(backupStorageRoot),
     host,
     port,
-    maxBackupSizeBytes: maxBackupSizeMb * 1024 * 1024,
+    allowAnyOrigin: allowedClientOrigins.includes("*"),
+    maxBackupSizeBytes: maxBackupSizeMb === null ? null : maxBackupSizeMb * 1024 * 1024,
     allowedClientOrigins,
   };
 }
@@ -160,6 +169,25 @@ function parseInteger(value, fallback, name) {
   const parsed = Number.parseInt(value, 10);
   if (!Number.isFinite(parsed) || parsed <= 0) {
     throw new Error(`${name} must be a positive integer.`);
+  }
+  return parsed;
+}
+
+function parseOptionalLimitMb(value, fallback, name) {
+  if (value === undefined) return fallback;
+
+  const normalized = String(value).trim().toLowerCase();
+  if (!normalized) return fallback;
+  if (normalized === "0" || normalized === "off" || normalized === "none" || normalized === "unlimited") {
+    return null;
+  }
+
+  const parsed = Number.parseInt(normalized, 10);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new Error(`${name} must be 0 for unlimited or a positive integer.`);
+  }
+  if (parsed === 0) {
+    return null;
   }
   return parsed;
 }
@@ -230,6 +258,9 @@ function handlePreflight(request, response, origin) {
 }
 
 function getAllowedOrigin(origin) {
+  if (config.allowAnyOrigin) {
+    return "*";
+  }
   if (!origin) return null;
   return isLocalDevelopmentOrigin(origin) || config.allowedClientOrigins.some((pattern) => matchesOriginPattern(origin, pattern))
     ? origin
@@ -402,6 +433,80 @@ async function readRequestBody(request, maxBytes) {
   });
 }
 
+async function writeRequestBodyToTempFile(request, filePath, maxBytes) {
+  return await new Promise((resolve, reject) => {
+    let size = 0;
+    let finished = false;
+    let headerBytes = Buffer.alloc(0);
+    const hash = createHash("sha256");
+    const output = createWriteStream(filePath, { flags: "w" });
+
+    const detachListeners = () => {
+      request.removeListener("data", onData);
+      request.removeListener("end", onEnd);
+      request.removeListener("error", onError);
+      request.removeListener("aborted", onAborted);
+      output.removeListener("error", onError);
+    };
+
+    const rejectWithCleanup = (error) => {
+      if (finished) return;
+      finished = true;
+      detachListeners();
+      output.destroy();
+      request.resume();
+      void fs.rm(filePath, { force: true }).catch(() => {});
+      reject(error);
+    };
+
+    const onData = (chunk) => {
+      if (finished) return;
+
+      size += chunk.length;
+      if (maxBytes !== null && size > maxBytes) {
+        rejectWithCleanup(httpError(413, `Backup exceeds ${Math.floor(maxBytes / (1024 * 1024))} MB limit.`));
+        return;
+      }
+
+      if (headerBytes.length < 2) {
+        const needed = 2 - headerBytes.length;
+        const nextBytes = chunk.subarray(0, Math.min(needed, chunk.length));
+        headerBytes = headerBytes.length === 0 ? Buffer.from(nextBytes) : Buffer.concat([headerBytes, nextBytes]);
+      }
+
+      hash.update(chunk);
+
+      if (!output.write(chunk)) {
+        request.pause();
+        output.once("drain", () => request.resume());
+      }
+    };
+
+    const onEnd = () => {
+      if (finished) return;
+      finished = true;
+      detachListeners();
+      output.end(() => {
+        resolve({
+          tempPath: filePath,
+          size,
+          sha256: hash.digest("hex"),
+          headerBytes,
+        });
+      });
+    };
+
+    const onError = (error) => rejectWithCleanup(error);
+    const onAborted = () => rejectWithCleanup(httpError(499, "Request was aborted."));
+
+    request.on("data", onData);
+    request.on("end", onEnd);
+    request.on("error", onError);
+    request.on("aborted", onAborted);
+    output.on("error", onError);
+  });
+}
+
 function getUserDirectory(userId) {
   return path.join(config.backupStorageRoot, encodeURIComponent(userId));
 }
@@ -413,17 +518,15 @@ async function ensureUserDirectories(userId) {
   return { userDir, historyDir };
 }
 
-async function storeLatestBackup(userId, body, requestedFileName) {
+async function storeLatestBackup(userId, upload, requestedFileName) {
   const { userDir, historyDir } = await ensureUserDirectories(userId);
   const latestPath = path.join(userDir, "latest.tar.gz");
-  const tempPath = path.join(userDir, "latest.tar.gz.uploading");
   const now = new Date();
   const timestamp = createTimestamp(now);
   const historyPath = path.join(historyDir, `${timestamp}.tar.gz`);
   const metadataPath = path.join(userDir, "metadata.json");
 
   const previousMetadata = await readMetadata(userId);
-  const sha256 = createHash("sha256").update(body).digest("hex");
 
   try {
     await fs.access(latestPath);
@@ -432,14 +535,14 @@ async function storeLatestBackup(userId, body, requestedFileName) {
     // No previous latest backup yet.
   }
 
-  await fs.writeFile(tempPath, body);
-  await fs.rename(tempPath, latestPath);
+  await fs.rm(latestPath, { force: true });
+  await fs.rename(upload.tempPath, latestPath);
 
   const nextEntry = {
     fileName: sanitizeFileName(requestedFileName),
     storedAt: now.toISOString(),
-    sizeBytes: body.length,
-    sha256,
+    sizeBytes: upload.size,
+    sha256: upload.sha256,
   };
   const nextMetadata = {
     userId,

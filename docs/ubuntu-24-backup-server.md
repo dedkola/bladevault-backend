@@ -132,15 +132,15 @@ BACKUP_STORAGE_ROOT=/var/lib/bladevault-backups
 AUTH_JWT_ISSUER=https://auth.bladevault.app
 AUTH_JWT_AUDIENCE=https://auth.bladevault.app
 AUTH_JWKS_URL=https://auth.bladevault.app/api/auth/jwks
-MAX_BACKUP_SIZE_MB=50
-ALLOWED_CLIENT_ORIGINS=http://localhost:*,http://127.0.0.1:*,http://[::1]:*
+MAX_BACKUP_SIZE_MB=0
+ALLOWED_CLIENT_ORIGINS=*
 HOST=127.0.0.1
 PORT=8080
 ```
 
 `ALLOWED_CLIENT_ORIGINS` is needed because the browser frontend calls the backup
-domain directly and sends `Authorization` headers. Keep this list tight, but it
-can use wildcard ports for local development.
+domain directly and sends `Authorization` headers. Use `*` if you want to allow
+all frontend origins. `MAX_BACKUP_SIZE_MB=0` disables the app-level upload cap.
 
 ## 8. Reverse proxy target
 
