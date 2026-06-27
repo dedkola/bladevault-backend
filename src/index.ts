@@ -244,7 +244,12 @@ app.get("/auth/popup/start", async (c) => {
     return jsonError("Google sign-in URL was not returned by Better Auth", 500);
   }
 
-  return c.redirect(data.url, 302);
+  const headers = new Headers(signInResponse.headers);
+  headers.set("Location", data.url);
+  return new Response(null, {
+    status: 302,
+    headers,
+  });
 });
 
 app.get("/auth/popup/complete", async (c) => {
