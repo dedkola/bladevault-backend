@@ -21,7 +21,7 @@
   "vars": {
     "APP_NAME": "BladeVault",
     "AUTH_PUBLIC_BASE_URL": "https://auth.tkweb.site",
-    "ALLOWED_CLIENT_ORIGINS": "http://localhost:*,http://127.0.0.1:*,http://[::1]:*",
+    "ALLOWED_CLIENT_ORIGINS": "*",
     "COOKIE_DOMAIN": "",
   },
   "observability": {

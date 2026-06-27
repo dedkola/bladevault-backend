@@ -102,7 +102,15 @@ export function getAuthPublicBaseUrl(env: Pick<Env, "AUTH_PUBLIC_BASE_URL">): st
 }
 
 export function getAllowedClientOriginPatterns(env: Pick<Env, "ALLOWED_CLIENT_ORIGINS">): string[] {
-  return splitCsv(env.ALLOWED_CLIENT_ORIGINS).map(normalizeBaseUrl);
+  return splitCsv(env.ALLOWED_CLIENT_ORIGINS)
+    .map(normalizeBaseUrl)
+    .filter((pattern) => pattern !== "*");
+}
+
+export function allowsAnyClientOrigin(env: Pick<Env, "ALLOWED_CLIENT_ORIGINS">): boolean {
+  return splitCsv(env.ALLOWED_CLIENT_ORIGINS)
+    .map(normalizeBaseUrl)
+    .includes("*");
 }
 
 export function getTrustedOrigins(
@@ -121,6 +129,7 @@ export function isAllowedClientOrigin(
   env: Pick<Env, "AUTH_PUBLIC_BASE_URL" | "ALLOWED_CLIENT_ORIGINS">,
 ): boolean {
   if (!origin) return false;
+  if (allowsAnyClientOrigin(env)) return true;
   return (
     isLocalDevelopmentOrigin(origin) ||
     getTrustedOrigins(env).some((pattern) => matchesOriginPattern(origin, pattern))
