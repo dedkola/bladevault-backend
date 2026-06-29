@@ -51,6 +51,7 @@ Copy these files into `/opt/bladevault-backup-server`:
 - `server.js`
 - `.env`
 - `bladevault-backup-server.service.example`
+- `scripts/cleanup-backup-history.sh`
 
 Then:
 
@@ -68,4 +69,35 @@ sudo cp bladevault-backup-server.service.example /etc/systemd/system/bladevault-
 sudo systemctl daemon-reload
 sudo systemctl enable bladevault-backup-server
 sudo systemctl start bladevault-backup-server
+```
+
+## Backup retention cron (keep latest 10)
+
+`scripts/cleanup-backup-history.sh` removes old files from each user's
+`history/` folder and keeps only the newest 10 `.tar.gz` copies. It does not
+touch `latest.tar.gz`.
+
+Install script:
+
+```bash
+cd /opt/bladevault-backup-server
+mkdir -p scripts
+chmod 750 scripts/cleanup-backup-history.sh
+```
+
+Test in dry-run mode:
+
+```bash
+BACKUP_STORAGE_ROOT=/var/lib/bladevault-backups \
+  /opt/bladevault-backup-server/scripts/cleanup-backup-history.sh --dry-run --keep 10
+```
+
+Set daily cron at 03:30:
+
+```bash
+crontab -e
+```
+
+```cron
+30 3 * * * BACKUP_STORAGE_ROOT=/var/lib/bladevault-backups /opt/bladevault-backup-server/scripts/cleanup-backup-history.sh --keep 10 >> /var/log/bladevault-backup-retention.log 2>&1
 ```
