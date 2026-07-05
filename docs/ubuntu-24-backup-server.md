@@ -153,6 +153,7 @@ Copy these files from this repo to `/opt/bladevault-backup-server`:
 - [backup-server/server.js](/Users/kolasokol/Code/bladevault-backend/backup-server/server.js)
 - [backup-server/package.json](/Users/kolasokol/Code/bladevault-backend/backup-server/package.json)
 - [backup-server/package-lock.json](/Users/kolasokol/Code/bladevault-backend/backup-server/package-lock.json)
+- [backup-server/scripts/cleanup-backup-history.sh](/Users/kolasokol/Code/bladevault-backend/backup-server/scripts/cleanup-backup-history.sh)
 - [backup-server/.env.example](/Users/kolasokol/Code/bladevault-backend/backup-server/.env.example)
 - [backup-server/bladevault-backup-server.service.example](/Users/kolasokol/Code/bladevault-backend/backup-server/bladevault-backup-server.service.example)
 

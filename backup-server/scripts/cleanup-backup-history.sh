@@ -1,6 +1,10 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
 set -euo pipefail
+
+# Cron often runs with a very small PATH. Prepend a safe default while
+# preserving any existing PATH entries such as nvm or Homebrew installs.
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${PATH:-}"
 
 KEEP_COUNT=10
 DRY_RUN=0
@@ -87,11 +91,70 @@ get_mtime() {
   fi
 }
 
+sync_user_metadata() {
+  local user_dir="$1"
+  local history_dir="$user_dir/history"
+  local metadata_path="$user_dir/metadata.json"
+
+  if [[ ! -f "$metadata_path" ]]; then
+    return 0
+  fi
+
+  if ! command -v node >/dev/null 2>&1; then
+    echo "Skipping metadata sync for ${user_dir}: node is not installed." >&2
+    return 0
+  fi
+
+  if [[ "$DRY_RUN" -eq 1 ]]; then
+    echo "DRY-RUN sync metadata at $metadata_path"
+    return 0
+  fi
+
+  USER_DIR="$user_dir" KEEP_COUNT="$KEEP_COUNT" node <<'EOF'
+const fs = require("fs");
+const path = require("path");
+
+const userDir = process.env.USER_DIR;
+const keepCount = Number.parseInt(process.env.KEEP_COUNT || "10", 10);
+const historyDir = path.join(userDir, "history");
+const metadataPath = path.join(userDir, "metadata.json");
+
+function createTimestamp(value) {
+  return String(value).replaceAll(":", "-").replaceAll(".", "-");
+}
+
+try {
+  const metadata = JSON.parse(fs.readFileSync(metadataPath, "utf8"));
+  const historyFiles = new Set(
+    fs
+      .readdirSync(historyDir, { withFileTypes: true })
+      .filter((entry) => entry.isFile() && entry.name.endsWith(".tar.gz"))
+      .map((entry) => entry.name),
+  );
+
+  const filteredHistory = Array.isArray(metadata.history)
+    ? metadata.history.filter((entry) => {
+        if (!entry || typeof entry !== "object") return false;
+        if (typeof entry.storedAt !== "string" || entry.storedAt.length === 0) return false;
+        return historyFiles.has(`${createTimestamp(entry.storedAt)}.tar.gz`);
+      })
+    : [];
+
+  metadata.history = filteredHistory.slice(0, keepCount);
+  fs.writeFileSync(metadataPath, `${JSON.stringify(metadata, null, 2)}\n`, "utf8");
+} catch (error) {
+  console.error(`Failed to sync metadata for ${userDir}:`, error);
+  process.exitCode = 1;
+}
+EOF
+}
+
 prune_user_history() {
   local user_dir="$1"
   local history_dir="$user_dir/history"
 
   if [[ ! -d "$history_dir" ]]; then
+    sync_user_metadata "$user_dir"
     return 0
   fi
 
@@ -103,7 +166,8 @@ prune_user_history() {
     records+=("${mtime}"$'\t'"${history_file}")
   done < <(find "$history_dir" -mindepth 1 -maxdepth 1 -type f -name '*.tar.gz' -print0)
 
-  if [[ "${#records[@]}" -le "$KEEP_COUNT" ]]; then
+  if [[ "${#records[@]}" -eq 0 ]]; then
+    sync_user_metadata "$user_dir"
     return 0
   fi
 
@@ -116,6 +180,11 @@ prune_user_history() {
       | sort -nr -k1,1 \
       | cut -f2-
   )
+
+  if [[ "${#records[@]}" -le "$KEEP_COUNT" ]]; then
+    sync_user_metadata "$user_dir"
+    return 0
+  fi
 
   local remove_count=$(( ${#sorted_files[@]} - KEEP_COUNT ))
   echo "[$(basename "$user_dir")] pruning ${remove_count} old backups from ${history_dir}"
@@ -137,6 +206,8 @@ prune_user_history() {
       rm -f -- "$target"
     fi
   done
+
+  sync_user_metadata "$user_dir"
 }
 
 while IFS= read -r -d '' user_dir; do

@@ -82,6 +82,7 @@ Install script:
 ```bash
 cd /opt/bladevault-backup-server
 mkdir -p scripts
+cp /path/to/repo/backup-server/scripts/cleanup-backup-history.sh scripts/
 chmod 750 scripts/cleanup-backup-history.sh
 ```
 
@@ -95,9 +96,13 @@ BACKUP_STORAGE_ROOT=/var/lib/bladevault-backups \
 Set daily cron at 03:30:
 
 ```bash
-crontab -e
+sudo crontab -e
 ```
 
 ```cron
 30 3 * * * BACKUP_STORAGE_ROOT=/var/lib/bladevault-backups /opt/bladevault-backup-server/scripts/cleanup-backup-history.sh --keep 10 >> /var/log/bladevault-backup-retention.log 2>&1
 ```
+
+If you install the cron under a non-root user, change the log path to a file
+that user can write. Otherwise the shell redirection can fail before the script
+even starts.

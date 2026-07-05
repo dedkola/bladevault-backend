@@ -11,6 +11,8 @@ const __dirname = path.dirname(__filename);
 
 loadEnvFile(path.join(__dirname, ".env"));
 
+const HISTORY_RETENTION_COUNT = 10;
+
 const config = loadConfig();
 const jwks = createRemoteJWKSet(new URL(config.authJwksUrl));
 const server = createServer(handleRequest);
@@ -548,7 +550,10 @@ async function storeLatestBackup(userId, upload, requestedFileName) {
     userId,
     updatedAt: nextEntry.storedAt,
     latest: nextEntry,
-    history: dedupeHistoryEntries([nextEntry, previousMetadata.latest, ...previousMetadata.history]).slice(0, 20),
+    history: dedupeHistoryEntries([previousMetadata.latest, ...previousMetadata.history]).slice(
+      0,
+      HISTORY_RETENTION_COUNT,
+    ),
   };
 
   await fs.writeFile(metadataPath, `${JSON.stringify(nextMetadata, null, 2)}\n`, "utf8");
