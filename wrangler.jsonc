@@ -6,7 +6,7 @@
   "compatibility_flags": ["nodejs_compat"],
   "routes": [
     {
-      "pattern": "auth.tkweb.site",
+      "pattern": "auth.tkweb.dev",
       "custom_domain": true
     }
   ],
@@ -20,7 +20,7 @@
   ],
   "vars": {
     "APP_NAME": "BladeVault",
-    "AUTH_PUBLIC_BASE_URL": "https://auth.tkweb.site",
+    "AUTH_PUBLIC_BASE_URL": "https://auth.tkweb.dev",
     "ALLOWED_CLIENT_ORIGINS": "*",
     "COOKIE_DOMAIN": "",
   },
