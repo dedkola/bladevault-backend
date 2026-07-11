@@ -154,5 +154,6 @@ npm run deploy
 See:
 
 - [docs/architecture.md](/Users/kolasokol/Code/bladevault-backend/docs/architecture.md)
+- [docs/domain-migration-bladevault-pro.md](/Users/kolasokol/Code/bladevault-backend/docs/domain-migration-bladevault-pro.md)
 - [docs/ubuntu-24-backup-server.md](/Users/kolasokol/Code/bladevault-backend/docs/ubuntu-24-backup-server.md)
 - [docs/migration-to-linux-backup-server.md](/Users/kolasokol/Code/bladevault-backend/docs/migration-to-linux-backup-server.md)

@@ -6,7 +6,7 @@
   "compatibility_flags": ["nodejs_compat"],
   "routes": [
     {
-      "pattern": "auth.tkweb.dev",
+      "pattern": "auth.bladevault.pro",
       "custom_domain": true
     }
   ],
@@ -20,9 +20,9 @@
   ],
   "vars": {
     "APP_NAME": "BladeVault",
-    "AUTH_PUBLIC_BASE_URL": "https://auth.tkweb.dev",
-    "ALLOWED_CLIENT_ORIGINS": "*",
-    "COOKIE_DOMAIN": "",
+    "AUTH_PUBLIC_BASE_URL": "https://auth.bladevault.pro",
+    "ALLOWED_CLIENT_ORIGINS": "https://bladevault.pro,https://*.bladevault.pro,http://localhost:*,http://127.0.0.1:*",
+    "COOKIE_DOMAIN": ".bladevault.pro",
   },
   "observability": {
     "enabled": true,
