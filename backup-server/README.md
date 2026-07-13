@@ -105,4 +105,4 @@ sudo crontab -e
 
 If you install the cron under a non-root user, change the log path to a file
 that user can write. Otherwise the shell redirection can fail before the script
-even starts.
+even starts
