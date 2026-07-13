@@ -10,7 +10,7 @@
     "cf-typegen": "wrangler types"
   },
   "dependencies": {
-    "@better-auth/infra": "^0.3.4",
+    "@better-auth/infra": "^0.3.6",
     "better-auth": "1.6.23",
     "hono": "4.12.27",
     "zod": "^4.1.12"
