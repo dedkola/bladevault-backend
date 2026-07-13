@@ -190,5 +190,5 @@ Current semantics:
 
 ## Related Docs
 
-- [README.md](/Users/kolasokol/Code/bladevault-backend/README.md)
-- [docs/ubuntu-24-backup-server.md](/Users/kolasokol/Code/bladevault-backend/docs/ubuntu-24-backup-server.md)
+- [README.md](../README.md)
+- [docs/ubuntu-24-backup-server.md](ubuntu-24-backup-server.md)

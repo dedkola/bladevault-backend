@@ -72,10 +72,10 @@ Final path map:
 
 Copy these files from this repo to `/opt/bladevault-backup-server`:
 
-- [backup-server/server.js](/Users/kolasokol/Code/bladevault-backend/backup-server/server.js)
-- [backup-server/package.json](/Users/kolasokol/Code/bladevault-backend/backup-server/package.json)
-- [backup-server/package-lock.json](/Users/kolasokol/Code/bladevault-backend/backup-server/package-lock.json)
-- [backup-server/bladevault-backup-server.service.example](/Users/kolasokol/Code/bladevault-backend/backup-server/bladevault-backup-server.service.example)
+- [backup-server/server.js](../backup-server/server.js)
+- [backup-server/package.json](../backup-server/package.json)
+- [backup-server/package-lock.json](../backup-server/package-lock.json)
+- [backup-server/bladevault-backup-server.service.example](../backup-server/bladevault-backup-server.service.example)
 
 Then install runtime dependencies:
 
@@ -295,5 +295,5 @@ Check:
 
 ## Related Docs
 
-- [docs/architecture.md](/Users/kolasokol/Code/bladevault-backend/docs/architecture.md)
-- [docs/ubuntu-24-backup-server.md](/Users/kolasokol/Code/bladevault-backend/docs/ubuntu-24-backup-server.md)
+- [docs/architecture.md](architecture.md)
+- [docs/ubuntu-24-backup-server.md](ubuntu-24-backup-server.md)

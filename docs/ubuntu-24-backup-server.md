@@ -8,8 +8,8 @@ Use this when you want to provision a fresh Ubuntu 24 host for:
 
 The auth Worker stays on Cloudflare and is documented separately in:
 
-- [docs/architecture.md](/Users/kolasokol/Code/bladevault-backend/docs/architecture.md)
-- [README.md](/Users/kolasokol/Code/bladevault-backend/README.md)
+- [docs/architecture.md](architecture.md)
+- [README.md](../README.md)
 
 ## What This Server Does
 
@@ -150,12 +150,12 @@ Recommended:
 
 Copy these files from this repo to `/opt/bladevault-backup-server`:
 
-- [backup-server/server.js](/Users/kolasokol/Code/bladevault-backend/backup-server/server.js)
-- [backup-server/package.json](/Users/kolasokol/Code/bladevault-backend/backup-server/package.json)
-- [backup-server/package-lock.json](/Users/kolasokol/Code/bladevault-backend/backup-server/package-lock.json)
-- [backup-server/scripts/cleanup-backup-history.sh](/Users/kolasokol/Code/bladevault-backend/backup-server/scripts/cleanup-backup-history.sh)
-- [backup-server/.env.example](/Users/kolasokol/Code/bladevault-backend/backup-server/.env.example)
-- [backup-server/bladevault-backup-server.service.example](/Users/kolasokol/Code/bladevault-backend/backup-server/bladevault-backup-server.service.example)
+- [backup-server/server.js](../backup-server/server.js)
+- [backup-server/package.json](../backup-server/package.json)
+- [backup-server/package-lock.json](../backup-server/package-lock.json)
+- [backup-server/scripts/cleanup-backup-history.sh](../backup-server/scripts/cleanup-backup-history.sh)
+- [backup-server/.env.example](../backup-server/.env.example)
+- [backup-server/bladevault-backup-server.service.example](../backup-server/bladevault-backup-server.service.example)
 
 Install dependencies:
 
@@ -303,5 +303,5 @@ sudo find /var/lib/bladevault-backups -maxdepth 3 -type f | sort
 
 ## Related Docs
 
-- [docs/architecture.md](/Users/kolasokol/Code/bladevault-backend/docs/architecture.md)
-- [docs/migration-to-linux-backup-server.md](/Users/kolasokol/Code/bladevault-backend/docs/migration-to-linux-backup-server.md)
+- [docs/architecture.md](architecture.md)
+- [docs/migration-to-linux-backup-server.md](migration-to-linux-backup-server.md)
