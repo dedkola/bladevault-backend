@@ -13,7 +13,7 @@
     "@better-auth/infra": "^0.4.9",
     "better-auth": "1.7.4",
     "hono": "4.13.7",
-    "zod": "^4.6.2"
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260904.1",
