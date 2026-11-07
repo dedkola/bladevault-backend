@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@better-auth/infra": "^0.4.25",
+    "@sentry/cloudflare": "^11.10.0",
     "better-auth": "1.7.14",
     "hono": "4.13.14",
     "zod": "^4.6.7"

@@ -5,11 +5,15 @@ import { createServer } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRemoteJWKSet, jwtVerify } from "jose";
+import { initSentry, reportServerError } from "./sentry.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 loadEnvFile(path.join(__dirname, ".env"));
+
+const packageVersion = JSON.parse(readFileSync(path.join(__dirname, "package.json"), "utf8")).version;
+await initSentry(process.env, packageVersion);
 
 const HISTORY_RETENTION_COUNT = 10;
 
@@ -124,6 +128,9 @@ async function handleRequest(request, response) {
   } catch (error) {
     const status = Number.isInteger(error?.statusCode) ? error.statusCode : 500;
     const message = error instanceof Error ? error.message : "Internal server error.";
+    if (status >= 500) {
+      reportServerError(error, `${request.method} ${(request.url || "/").split("?")[0]}`);
+    }
     if (!response.headersSent) {
       applyCorsHeaders(response, request.headers.origin);
       sendJson(response, status, { error: message });

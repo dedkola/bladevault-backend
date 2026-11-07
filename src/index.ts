@@ -1,9 +1,11 @@
 import { Hono, type Context } from "hono";
+import * as Sentry from "@sentry/cloudflare";
 import { cors } from "hono/cors";
 import { z } from "zod";
 import { createAuth } from "./auth";
 import type { Env } from "./env";
 import { getAuthPublicBaseUrl, getTrustedOrigins, isAllowedClientOrigin } from "./env";
+import { getSentryOptions } from "./sentry";
 
 type AuthInstance = ReturnType<typeof createAuth>;
 type SessionValue = AuthInstance["$Infer"]["Session"]["session"] | null;
@@ -313,6 +315,12 @@ app.all("/api/auth/*", (c) => {
 });
 
 app.notFound(() => jsonError("Not found", 404));
-app.onError((error) => jsonError(error.message || "Internal server error", 500));
+app.onError((error, c) => {
+  Sentry.withScope((scope) => {
+    scope.setTag("route", c.req.routePath);
+    Sentry.captureException(error);
+  });
+  return jsonError(error.message || "Internal server error", 500);
+});
 
-export default app;
+export default Sentry.withSentry((env: Env) => getSentryOptions(env), app);

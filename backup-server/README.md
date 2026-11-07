@@ -33,6 +33,10 @@ The server stores the uploaded BladeVault `data/` folder as a `tar.gz` archive p
   - defaults to `127.0.0.1`
 - `PORT`
   - defaults to `8080`
+- `SENTRY_DSN`
+  - turns on error reporting for unexpected 5xx errors and crashes; off when unset
+- `SENTRY_ENVIRONMENT`
+  - defaults to `production`
 
 ## Local run
 
