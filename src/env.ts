@@ -8,6 +8,10 @@ export interface Env {
   COOKIE_DOMAIN?: string;
   GOOGLE_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;
+  SENTRY_DSN?: string;
+  SENTRY_ENVIRONMENT?: string;
+  SENTRY_RELEASE?: string;
+  CF_VERSION_METADATA?: WorkerVersionMetadata;
 }
 
 export function splitCsv(value: string | undefined): string[] {

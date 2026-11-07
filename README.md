@@ -85,6 +85,7 @@ All public URLs are env-driven.
 - `GOOGLE_CLIENT_ID`
 - `GOOGLE_CLIENT_SECRET`
 - optional `BETTER_AUTH_API_KEY`
+- optional `SENTRY_DSN` (see [Error reporting](#error-reporting))
 
 ### Google OAuth
 
@@ -148,6 +149,15 @@ Deploy:
 ```bash
 npm run deploy
 ```
+
+## Error reporting
+
+Both services can report unexpected errors to Sentry project `bladevault-backend`. Each is off until it has a DSN.
+
+- Auth Worker: run `npx wrangler secret put SENTRY_DSN`, then deploy. Optional vars: `SENTRY_ENVIRONMENT` (defaults to `production`) and `SENTRY_RELEASE`. For automatic releases per deploy, add `"version_metadata": { "binding": "CF_VERSION_METADATA" }` to `wrangler.jsonc`.
+- Backup server: add `SENTRY_DSN` to `backup-server/.env` and restart the service. Releases are `bladevault-backup-server@<package version>`.
+
+Only unexpected failures (HTTP 500 and crashes) are reported, not 4xx responses. Reports never include headers, cookies, bodies, query strings (for example OAuth `code` and `state`), user details, tokens, JWTs, or email addresses. Tracing is off.
 
 ## Docs
 
