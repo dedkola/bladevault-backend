@@ -83,6 +83,25 @@ export function scrubEvent(event) {
   return event;
 }
 
+function scrubAttributes(attributes) {
+  if (!attributes) return attributes;
+  return Object.fromEntries(
+    Object.entries(attributes).map(([key, value]) => [key, typeof value === "string" ? scrubText(value) : value]),
+  );
+}
+
+export function scrubLog(log) {
+  return {
+    ...log,
+    message: typeof log.message === "string" ? scrubText(log.message) : log.message,
+    attributes: scrubAttributes(log.attributes),
+  };
+}
+
+export function scrubMetric(metric) {
+  return { ...metric, attributes: scrubAttributes(metric.attributes) };
+}
+
 export function getSentryOptions(env, version) {
   const dsn = env.SENTRY_DSN?.trim();
   if (!dsn || !dsn.startsWith("https://")) return null;
@@ -105,6 +124,8 @@ export function getSentryOptions(env, version) {
     initialScope: { tags: { service: "backup-server" } },
     beforeSend: (event) => scrubEvent(event),
     beforeBreadcrumb: (breadcrumb) => scrubBreadcrumb(breadcrumb),
+    beforeSendLog: (log) => scrubLog(log),
+    beforeSendMetric: (metric) => scrubMetric(metric),
   };
 }
 
@@ -113,7 +134,11 @@ export async function initSentry(env, version) {
   const options = getSentryOptions(env, version);
   if (!options) return false;
   sentry = await import("@sentry/node");
-  sentry.init(options);
+  sentry.init({
+    ...options,
+    // Existing console.warn/console.error lines become Sentry logs.
+    integrations: [sentry.consoleLoggingIntegration({ levels: ["warn", "error"] })],
+  });
   return true;
 }
 
@@ -124,4 +149,19 @@ export function reportServerError(error, route) {
     scope.setTag("route", route);
     sentry.captureException(error);
   });
+}
+
+// Counts a backup upload or download by outcome, with the archive size for
+// successful transfers. No user ID or file name is attached.
+export function recordBackupTransfer(kind, result, sizeBytes) {
+  if (!sentry) return;
+  sentry.metrics.count(`backup.${kind}`, 1, { attributes: { result } });
+  if (result === "ok" && Number.isFinite(sizeBytes)) {
+    sentry.metrics.distribution(`backup.${kind}.size`, sizeBytes, { unit: "byte" });
+  }
+}
+
+export function recordAuthRejected() {
+  if (!sentry) return;
+  sentry.metrics.count("backup.auth.rejected", 1);
 }
