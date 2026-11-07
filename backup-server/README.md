@@ -53,6 +53,7 @@ Copy these files into `/opt/bladevault-backup-server`:
 - `package.json`
 - `package-lock.json`
 - `server.js`
+- `sentry.js` (server.js imports it; the service won't start without it)
 - `.env`
 - `bladevault-backup-server.service.example`
 - `scripts/cleanup-backup-history.sh`
@@ -63,6 +64,8 @@ Then:
 cd /opt/bladevault-backup-server
 npm ci --omit=dev
 ```
+
+Run `npm ci --omit=dev` again after every update: with `SENTRY_DSN` set, the server needs `@sentry/node` installed or it fails to start.
 
 The service should listen on `127.0.0.1:8080` and stay behind Caddy.
 

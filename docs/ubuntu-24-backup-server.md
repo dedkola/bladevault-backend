@@ -151,6 +151,7 @@ Recommended:
 Copy these files from this repo to `/opt/bladevault-backup-server`:
 
 - [backup-server/server.js](../backup-server/server.js)
+- [backup-server/sentry.js](../backup-server/sentry.js) (required: server.js imports it)
 - [backup-server/package.json](../backup-server/package.json)
 - [backup-server/package-lock.json](../backup-server/package-lock.json)
 - [backup-server/scripts/cleanup-backup-history.sh](../backup-server/scripts/cleanup-backup-history.sh)
