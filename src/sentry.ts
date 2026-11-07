@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/cloudflare";
 import type { Breadcrumb, CloudflareOptions, ErrorEvent } from "@sentry/cloudflare";
 import type { Env } from "./env";
 
@@ -72,6 +73,47 @@ export function scrubEvent(event: ErrorEvent): ErrorEvent {
   return event;
 }
 
+type SentryLog = Parameters<NonNullable<CloudflareOptions["beforeSendLog"]>>[0];
+type SentryMetric = Parameters<NonNullable<CloudflareOptions["beforeSendMetric"]>>[0];
+
+// Logs and metric attributes get the same text scrubbing as error events.
+function scrubAttributes<T extends Record<string, unknown> | undefined>(attributes: T): T {
+  if (!attributes) return attributes;
+  return Object.fromEntries(
+    Object.entries(attributes).map(([key, value]) => [key, typeof value === "string" ? scrubText(value) : value]),
+  ) as T;
+}
+
+export function scrubLog(log: SentryLog): SentryLog {
+  return {
+    ...log,
+    message: typeof log.message === "string" ? scrubText(log.message) : log.message,
+    attributes: scrubAttributes(log.attributes),
+  };
+}
+
+export function scrubMetric(metric: SentryMetric): SentryMetric {
+  return { ...metric, attributes: scrubAttributes(metric.attributes) };
+}
+
+export type SignInStartResult = "ok" | "invalid_request" | "invalid_origin" | "start_failed";
+export type SignInCompleteResult = "ok" | "invalid_origin" | "no_session" | "token_failed";
+
+// Counts each popup sign-in step by outcome. No user, email, or origin is attached.
+export function recordSignInStart(result: SignInStartResult) {
+  Sentry.metrics.count("auth.signin.start", 1, { attributes: { result } });
+  if (result === "start_failed") {
+    Sentry.logger.warn("Popup sign-in could not start", { result });
+  }
+}
+
+export function recordSignInComplete(result: SignInCompleteResult) {
+  Sentry.metrics.count("auth.signin.complete", 1, { attributes: { result } });
+  if (result !== "ok") {
+    Sentry.logger.warn("Popup sign-in did not complete", { result });
+  }
+}
+
 export function getSentryOptions(env: Env): CloudflareOptions {
   const dsn = env.SENTRY_DSN?.trim();
   return {
@@ -93,5 +135,7 @@ export function getSentryOptions(env: Env): CloudflareOptions {
     initialScope: { tags: { service: "auth-worker" } },
     beforeSend: (event) => scrubEvent(event),
     beforeBreadcrumb: (breadcrumb) => scrubBreadcrumb(breadcrumb),
+    beforeSendLog: (log) => scrubLog(log),
+    beforeSendMetric: (metric) => scrubMetric(metric),
   };
 }

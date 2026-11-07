@@ -5,7 +5,7 @@ import { createServer } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRemoteJWKSet, jwtVerify } from "jose";
-import { initSentry, reportServerError } from "./sentry.js";
+import { initSentry, recordAuthRejected, recordBackupTransfer, reportServerError } from "./sentry.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -75,6 +75,7 @@ async function handleRequest(request, response) {
         declaredContentLength !== null &&
         declaredContentLength > config.maxBackupSizeBytes
       ) {
+        recordBackupTransfer("upload", "too_large");
         return sendJson(response, 413, {
           error: `Backup exceeds ${Math.floor(config.maxBackupSizeBytes / (1024 * 1024))} MB limit.`,
         });
@@ -85,15 +86,18 @@ async function handleRequest(request, response) {
       const upload = await writeRequestBodyToTempFile(request, uploadPath, config.maxBackupSizeBytes);
 
       if (upload.size === 0) {
+        recordBackupTransfer("upload", "empty");
         return sendJson(response, 400, { error: "Backup file is empty." });
       }
 
       if (!isTarGzipFile(upload.headerBytes)) {
         await fs.rm(upload.tempPath, { force: true }).catch(() => {});
+        recordBackupTransfer("upload", "invalid_archive");
         return sendJson(response, 400, { error: "Backup file is not a valid tar.gz archive." });
       }
 
       const result = await storeLatestBackup(auth.userId, upload, request.headers["x-backup-filename"]);
+      recordBackupTransfer("upload", "ok", upload.size);
       return sendJson(response, 200, {
         ok: true,
         user: auth.user,
@@ -110,6 +114,7 @@ async function handleRequest(request, response) {
       try {
         stat = await fs.stat(latestPath);
       } catch {
+        recordBackupTransfer("download", "not_found");
         return sendJson(response, 404, { error: "No backup found for this account." });
       }
 
@@ -121,6 +126,7 @@ async function handleRequest(request, response) {
       response.setHeader("Content-Length", String(stat.size));
       response.setHeader("Cache-Control", "no-store");
       response.end(file);
+      recordBackupTransfer("download", "ok", stat.size);
       return;
     }
 
@@ -128,6 +134,9 @@ async function handleRequest(request, response) {
   } catch (error) {
     const status = Number.isInteger(error?.statusCode) ? error.statusCode : 500;
     const message = error instanceof Error ? error.message : "Internal server error.";
+    if (request.method === "PUT" && (request.url || "").split("?")[0] === "/backup/latest" && status !== 401) {
+      recordBackupTransfer("upload", status === 413 ? "too_large" : "error");
+    }
     if (status >= 500) {
       reportServerError(error, `${request.method} ${(request.url || "/").split("?")[0]}`);
     }
@@ -372,6 +381,7 @@ async function requireAuth(request) {
     };
   } catch (error) {
     console.error("[bladevault-backup-server] auth error", error);
+    recordAuthRejected();
     throw httpError(401, "Invalid or expired bearer token.");
   }
 }

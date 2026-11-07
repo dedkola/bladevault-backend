@@ -157,7 +157,18 @@ Both services can report unexpected errors to Sentry project `bladevault-backend
 - Auth Worker: run `npx wrangler secret put SENTRY_DSN`, then deploy. Optional vars: `SENTRY_ENVIRONMENT` (defaults to `production`) and `SENTRY_RELEASE`. For automatic releases per deploy, add `"version_metadata": { "binding": "CF_VERSION_METADATA" }` to `wrangler.jsonc`.
 - Backup server: add `SENTRY_DSN` to `backup-server/.env` and restart the service. Releases are `bladevault-backup-server@<package version>`.
 
-Only unexpected failures (HTTP 500 and crashes) are reported, not 4xx responses. Reports never include headers, cookies, bodies, query strings (for example OAuth `code` and `state`), user details, tokens, JWTs, or email addresses. Tracing is off.
+Only unexpected failures (HTTP 500 and crashes) are reported as errors, not 4xx responses.
+
+With a DSN set, both services also send logs and metrics:
+
+| Service | Metric | Attributes |
+| --- | --- | --- |
+| Auth Worker | `auth.signin.start`, `auth.signin.complete` | `result` (`ok`, `invalid_request`, `invalid_origin`, `start_failed`, `no_session`, `token_failed`) |
+| Backup server | `backup.upload`, `backup.download` | `result` (`ok`, `too_large`, `empty`, `invalid_archive`, `not_found`, `error`) |
+| Backup server | `backup.upload.size`, `backup.download.size` | bytes, successful transfers only |
+| Backup server | `backup.auth.rejected` | none |
+
+Failed sign-ins are logged as warnings, and the backup server's `console.warn` and `console.error` lines become Sentry logs. No user ID, email, origin, or file name is attached, and logs and metric attributes get the same scrubbing as errors. Reports never include headers, cookies, bodies, query strings (for example OAuth `code` and `state`), user details, tokens, JWTs, or email addresses. Tracing is off.
 
 ## Docs
 

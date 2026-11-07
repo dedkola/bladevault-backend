@@ -5,7 +5,7 @@ import { z } from "zod";
 import { createAuth } from "./auth";
 import type { Env } from "./env";
 import { getAuthPublicBaseUrl, getTrustedOrigins, isAllowedClientOrigin } from "./env";
-import { getSentryOptions } from "./sentry";
+import { getSentryOptions, recordSignInComplete, recordSignInStart } from "./sentry";
 
 type AuthInstance = ReturnType<typeof createAuth>;
 type SessionValue = AuthInstance["$Infer"]["Session"]["session"] | null;
@@ -209,10 +209,12 @@ app.get("/auth/popup/start", async (c) => {
   });
 
   if (!parsed.success) {
+    recordSignInStart("invalid_request");
     return jsonError("Valid client_origin is required", 400);
   }
 
   if (!isAllowedClientOrigin(parsed.data.client_origin, c.env)) {
+    recordSignInStart("invalid_origin");
     return jsonError("client_origin is not allowed", 403);
   }
 
@@ -234,6 +236,7 @@ app.get("/auth/popup/start", async (c) => {
 
   const signInResponse = await auth.handler(signInRequest);
   if (!signInResponse.ok) {
+    recordSignInStart("start_failed");
     const body = await signInResponse.text();
     return new Response(body, {
       status: signInResponse.status,
@@ -243,8 +246,11 @@ app.get("/auth/popup/start", async (c) => {
 
   const data = (await signInResponse.json()) as { url?: string };
   if (!data.url) {
+    recordSignInStart("start_failed");
     return jsonError("Google sign-in URL was not returned by Better Auth", 500);
   }
+
+  recordSignInStart("ok");
 
   const headers = new Headers(signInResponse.headers);
   headers.set("Location", data.url);
@@ -260,6 +266,7 @@ app.get("/auth/popup/complete", async (c) => {
   });
 
   if (!parsed.success || !isAllowedClientOrigin(parsed.data.client_origin, c.env)) {
+    recordSignInComplete("invalid_origin");
     return renderPopupPage(parsed.success ? parsed.data.client_origin : "*", {
       type: "bladevault-auth-error",
       error: {
@@ -274,6 +281,7 @@ app.get("/auth/popup/complete", async (c) => {
   });
 
   if (!session?.session || !session.user) {
+    recordSignInComplete("no_session");
     return renderPopupPage(parsed.data.client_origin, {
       type: "bladevault-auth-error",
       error: {
@@ -287,6 +295,7 @@ app.get("/auth/popup/complete", async (c) => {
 
   const accessToken = await readJwtToken(c);
   if (!accessToken) {
+    recordSignInComplete("token_failed");
     return renderPopupPage(parsed.data.client_origin, {
       type: "bladevault-auth-error",
       error: {
@@ -295,6 +304,7 @@ app.get("/auth/popup/complete", async (c) => {
     });
   }
 
+  recordSignInComplete("ok");
   return renderPopupPage(parsed.data.client_origin, {
     type: "bladevault-auth-success",
     accessToken,
