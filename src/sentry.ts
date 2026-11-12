@@ -116,11 +116,13 @@ export function recordSignInComplete(result: SignInCompleteResult) {
 
 export function getSentryOptions(env: Env): CloudflareOptions {
   const dsn = env.SENTRY_DSN?.trim();
+  // Release comes from SENTRY_RELEASE or the CF_VERSION_METADATA binding.
+  const release = env.SENTRY_RELEASE?.trim() || env.CF_VERSION_METADATA?.id;
   return {
     dsn,
     enabled: Boolean(dsn),
     environment: env.SENTRY_ENVIRONMENT?.trim() || "production",
-    // Release comes from SENTRY_RELEASE or the CF_VERSION_METADATA binding.
+    ...(release ? { release } : {}),
     dataCollection: {
       userInfo: false,
       cookies: false,

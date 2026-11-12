@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { createWriteStream, readFileSync } from "node:fs";
+import { createReadStream, createWriteStream, readFileSync } from "node:fs";
 import fs from "node:fs/promises";
 import { createServer } from "node:http";
 import path from "node:path";
@@ -118,22 +118,34 @@ async function handleRequest(request, response) {
         return sendJson(response, 404, { error: "No backup found for this account." });
       }
 
-      const file = await fs.readFile(latestPath);
       response.statusCode = 200;
       response.setHeader("Content-Type", "application/octet-stream");
       const fileName = metadata.latest?.fileName || "bladevault-data.tar.gz";
       response.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
       response.setHeader("Content-Length", String(stat.size));
       response.setHeader("Cache-Control", "no-store");
-      response.end(file);
-      recordBackupTransfer("download", "ok", stat.size);
+
+      // Stream the archive so large backups never sit in memory.
+      const file = createReadStream(latestPath);
+      file.on("error", (error) => {
+        recordBackupTransfer("download", "error");
+        reportServerError(error, "GET /backup/latest");
+        response.destroy(error);
+      });
+      file.on("end", () => recordBackupTransfer("download", "ok", stat.size));
+      response.on("close", () => {
+        if (!response.writableFinished) file.destroy();
+      });
+      file.pipe(response);
       return;
     }
 
     return sendJson(response, 404, { error: "Not found." });
   } catch (error) {
     const status = Number.isInteger(error?.statusCode) ? error.statusCode : 500;
-    const message = error instanceof Error ? error.message : "Internal server error.";
+    // Keep internal error details (file paths, stack messages) out of responses.
+    const message =
+      status >= 500 ? "Internal server error." : error instanceof Error ? error.message : "Request failed.";
     if (request.method === "PUT" && (request.url || "").split("?")[0] === "/backup/latest" && status !== 401) {
       recordBackupTransfer("upload", status === 413 ? "too_large" : "error");
     }
@@ -407,49 +419,6 @@ function parseContentLength(value) {
 
 function isTarGzipFile(buffer) {
   return buffer.length >= 2 && buffer[0] === 0x1f && buffer[1] === 0x8b;
-}
-
-async function readRequestBody(request, maxBytes) {
-  return await new Promise((resolve, reject) => {
-    let size = 0;
-    const chunks = [];
-    let finished = false;
-
-    const finishWithError = (error) => {
-      if (finished) return;
-      finished = true;
-      request.removeListener("data", onData);
-      request.removeListener("end", onEnd);
-      request.removeListener("error", onError);
-      request.removeListener("aborted", onAborted);
-      reject(error);
-    };
-
-    const onData = (chunk) => {
-      if (finished) return;
-
-      size += chunk.length;
-      if (size > maxBytes) {
-        finishWithError(httpError(413, `Backup exceeds ${Math.floor(maxBytes / (1024 * 1024))} MB limit.`));
-        return;
-      }
-      chunks.push(chunk);
-    };
-
-    const onEnd = () => {
-      if (finished) return;
-      finished = true;
-      resolve(Buffer.concat(chunks));
-    };
-
-    const onError = (error) => finishWithError(error);
-    const onAborted = () => finishWithError(httpError(499, "Request was aborted."));
-
-    request.on("data", onData);
-    request.on("end", onEnd);
-    request.on("error", onError);
-    request.on("aborted", onAborted);
-  });
 }
 
 async function writeRequestBodyToTempFile(request, filePath, maxBytes) {

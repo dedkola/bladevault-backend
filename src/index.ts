@@ -1,6 +1,7 @@
 import { Hono, type Context } from "hono";
 import * as Sentry from "@sentry/cloudflare";
 import { cors } from "hono/cors";
+import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
 import { createAuth } from "./auth";
 import type { Env } from "./env";
@@ -47,7 +48,10 @@ const popupStartQuerySchema = z.object({
 function jsonError(message: string, status = 400) {
   return new Response(JSON.stringify({ error: message }), {
     status,
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "Cache-Control": "no-store",
+    },
   });
 }
 
@@ -119,7 +123,7 @@ function renderPopupPage(clientOrigin: string, payload: PopupAuthSuccess | Popup
 }
 
 async function readJwtToken(c: Context<AppType>): Promise<string | null> {
-  const auth = c.get("auth");
+  const auth = requireAuth(c);
   const response = await auth.handler(
     new Request(`${getAuthPublicBaseUrl(c.env)}/api/auth/token`, {
       method: "GET",
@@ -139,8 +143,8 @@ app.use("*", async (c, next) => {
   const allowedOrigins = getTrustedOrigins(c.env);
   return cors({
     origin: (origin) => {
-      if (!origin) return allowedOrigins[0] ?? "";
-      return isAllowedClientOrigin(origin, c.env) ? origin : "";
+      if (!origin) return allowedOrigins[0];
+      return isAllowedClientOrigin(origin, c.env) ? origin : undefined;
     },
     allowHeaders: ["Content-Type", "Authorization"],
     allowMethods: ["GET", "POST", "OPTIONS"],
@@ -326,11 +330,18 @@ app.all("/api/auth/*", (c) => {
 
 app.notFound(() => jsonError("Not found", 404));
 app.onError((error, c) => {
-  Sentry.withScope((scope) => {
-    scope.setTag("route", c.req.routePath);
-    Sentry.captureException(error);
-  });
-  return jsonError(error.message || "Internal server error", 500);
+  const status = error instanceof HTTPException ? error.status : 500;
+
+  if (status >= 500) {
+    Sentry.withScope((scope) => {
+      scope.setTag("route", c.req.routePath);
+      Sentry.captureException(error);
+    });
+    // Never expose internal error details to API clients.
+    return jsonError("Internal server error", status);
+  }
+
+  return jsonError(error.message, status);
 });
 
 export default Sentry.withSentry((env: Env) => getSentryOptions(env), app);

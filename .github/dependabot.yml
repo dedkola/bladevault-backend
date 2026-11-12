@@ -12,8 +12,8 @@ updates:
       - dependencies
     open-pull-requests-limit: 10
 
-  - package-ecosystem: github-actions
-    directory: /
+  - package-ecosystem: npm
+    directory: /backup-server
     schedule:
       interval: weekly
       day: monday
@@ -22,4 +22,4 @@ updates:
       - dedkola
     labels:
       - dependencies
-      - github-actions
+    open-pull-requests-limit: 10

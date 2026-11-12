@@ -19,32 +19,21 @@ type RuntimeEnv = Pick<
 };
 
 export function buildAuthOptions(env: RuntimeEnv): BetterAuthOptions {
-  const plugins = env.BETTER_AUTH_API_KEY
-    ? [
-        dash({
-          apiKey: env.BETTER_AUTH_API_KEY,
-        }),
-        bearer(),
-        jwt({
-          jwt: {
-            issuer: getAuthPublicBaseUrl(env),
-            audience: getAuthPublicBaseUrl(env),
-          },
-        }),
-      ]
-    : [
-        bearer(),
-        jwt({
-          jwt: {
-            issuer: getAuthPublicBaseUrl(env),
-            audience: getAuthPublicBaseUrl(env),
-          },
-        }),
-      ];
+  const authPublicBaseUrl = getAuthPublicBaseUrl(env);
+  const plugins: NonNullable<BetterAuthOptions["plugins"]> = [
+    ...(env.BETTER_AUTH_API_KEY ? [dash({ apiKey: env.BETTER_AUTH_API_KEY })] : []),
+    bearer(),
+    jwt({
+      jwt: {
+        issuer: authPublicBaseUrl,
+        audience: authPublicBaseUrl,
+      },
+    }),
+  ];
 
   return {
     appName: env.APP_NAME,
-    baseURL: getAuthPublicBaseUrl(env),
+    baseURL: authPublicBaseUrl,
     basePath: "/api/auth",
     secret: env.BETTER_AUTH_SECRET,
     database: env.DB,
@@ -61,7 +50,7 @@ export function buildAuthOptions(env: RuntimeEnv): BetterAuthOptions {
         : undefined,
     advanced: {
       trustedProxyHeaders: true,
-      useSecureCookies: isHttpsUrl(getAuthPublicBaseUrl(env)),
+      useSecureCookies: isHttpsUrl(authPublicBaseUrl),
       defaultCookieAttributes: {
         sameSite: "none",
       },

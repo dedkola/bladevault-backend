@@ -1,6 +1,6 @@
 # BladeVault Backend Architecture
 
-This repo now contains the two backend pieces used by BladeVault v1 cloud backup:
+This repository contains the two backend services used by BladeVault cloud backup:
 
 1. `bladevault-backend`
    Cloudflare Worker for auth only
@@ -12,12 +12,12 @@ The frontend talks to both services directly:
 - auth domain: `https://auth.example.com`
 - backup domain: `https://backup.example.com`
 
-## What Changed
+## Design Rationale
 
-The old design pushed app data and image work through the Worker. That caused CPU
+App data and image work used to run through the Worker, which caused CPU
 pressure and was the wrong place for large uploads.
 
-The new design separates responsibilities:
+The current design separates responsibilities:
 
 - the Worker handles Google sign-in, Better Auth sessions, and JWT issuance
 - the Linux backup server stores the uploaded backup archive on disk
@@ -162,6 +162,7 @@ Backup storage:
 - `GOOGLE_CLIENT_ID`
 - `GOOGLE_CLIENT_SECRET`
 - optional `BETTER_AUTH_API_KEY`
+- optional `SENTRY_DSN`, `SENTRY_ENVIRONMENT`, `SENTRY_RELEASE`
 
 ### Backup server env
 
@@ -174,10 +175,11 @@ Backup storage:
 - `ALLOWED_CLIENT_ORIGINS`
 - `HOST`
 - `PORT`
+- optional `SENTRY_DSN`, `SENTRY_ENVIRONMENT`, `SENTRY_RELEASE`
 
 Current semantics:
 
-- `MAX_BACKUP_SIZE_MB=0` means no app-level upload cap
+- `MAX_BACKUP_SIZE_MB=0` (or `off`/`none`/`unlimited`) means no app-level upload cap
 - `ALLOWED_CLIENT_ORIGINS=*` means allow every browser origin
 
 ## Operational Notes

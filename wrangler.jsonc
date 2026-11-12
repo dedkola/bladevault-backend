@@ -15,23 +15,19 @@
       "binding": "DB",
       "database_name": "bladevault",
       "database_id": "c8197b2b-bb48-4617-beab-69512252d986",
-      "remote": true,
-    },
+      "remote": true
+    }
   ],
   "vars": {
     "APP_NAME": "BladeVault",
     "AUTH_PUBLIC_BASE_URL": "https://auth.bladevault.pro",
     "ALLOWED_CLIENT_ORIGINS": "https://bladevault.pro,https://*.bladevault.pro,http://localhost:*,http://127.0.0.1:*",
-    "COOKIE_DOMAIN": ".bladevault.pro",
+    "COOKIE_DOMAIN": ".bladevault.pro"
+  },
+  "version_metadata": {
+    "binding": "CF_VERSION_METADATA"
   },
   "observability": {
-    "enabled": true,
-  },
-  "secrets": {
-    "required": [
-      "BETTER_AUTH_SECRET",
-      "GOOGLE_CLIENT_ID",
-      "GOOGLE_CLIENT_SECRET"
-    ],
-  },
+    "enabled": true
+  }
 }

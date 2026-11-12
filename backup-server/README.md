@@ -1,6 +1,6 @@
 # BladeVault Backup Server
 
-Minimal Node.js backup API for Ubuntu 24.
+Minimal Node.js 20+ backup API for Ubuntu 24.
 
 The server stores the uploaded BladeVault `data/` folder as a `tar.gz` archive per user.
 
@@ -25,7 +25,7 @@ The server stores the uploaded BladeVault `data/` folder as a `tar.gz` archive p
   - defaults to `AUTH_JWT_ISSUER`
 - `MAX_BACKUP_SIZE_MB`
   - defaults to `50`
-  - set to `0`, `none`, or `unlimited` to disable the app-level size cap
+  - set to `0`, `off`, `none`, or `unlimited` to disable the app-level size cap
 - `ALLOWED_CLIENT_ORIGINS`
   - comma-separated browser origins or wildcard patterns
   - set to `*` to allow every browser origin

@@ -2,6 +2,7 @@
   "name": "bladevault-backup-server",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "start": "node server.js"
@@ -9,5 +10,8 @@
   "dependencies": {
     "@sentry/node": "^11.11.0",
     "jose": "^6.1.2"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }
