@@ -4,6 +4,7 @@ import { cors } from "hono/cors";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
 import { createAuth } from "./auth";
+import { registerDriveRoutes } from "./drive";
 import type { Env } from "./env";
 import { getAuthPublicBaseUrl, getTrustedOrigins, isAllowedClientOrigin } from "./env";
 import { getSentryOptions, recordSignInComplete, recordSignInStart } from "./sentry";
@@ -322,6 +323,8 @@ app.get("/auth/popup/complete", async (c) => {
     },
   });
 });
+
+registerDriveRoutes(app);
 
 app.all("/api/auth/*", (c) => {
   const auth = c.get("auth");
